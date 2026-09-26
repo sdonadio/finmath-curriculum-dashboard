@@ -1,0 +1,25 @@
+Quantitative Trading Strategies
+
+Quantitative trading strategies, employing investment decisions based on model output, are a major component of business operations in the finance industry worldwide. We will present the vital features of these strategies as found in several asset classes (equities, futures, credit, FX, interest rates, energy, and, to a lesser extent, cryptotokens). Particular topics of concentration include spread trades, carry trades, parameter reversion, model prediction/evaluation, and market making.
+
+A large proportion of the models involved in quantitative strategies are expressible in terms of regressions. We will cover most of the ways they are used, including practical tricks and considerations, concentrating particularly on achieving trustworthy performance. Mathematically, we will learn the computation of linear regressions with and without weights, in univariate and multivariate cases, having least squares or other objective functions.
+
+Of the major computation technologies actively used by the finance industry (C/C++, Matlab, kdb, Java, R, VB/Excel, C#, Julia, SQL, Python) we have chosen R and Python for numerical computation, with data coming from Quandl and some proprietary sources.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Brian Boonstra
+
+Concentration: Trading
+
+Syllabus
+
+Online Program
+
+Quarter: Spring 2026
+
+Instructor: Brian Boonstra
+
+Syllabus

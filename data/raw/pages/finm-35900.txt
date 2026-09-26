@@ -1,0 +1,35 @@
+Macro-Finance
+
+A significant goal of this course is to give you quantitative work while simultaneously evaluating you on your ability to communicate, present and discuss your conclusions, work and ideas. In addition, to pair with the quant skills you should be honing throughout the program (and in this course), this course seeks to give additional intuition and narrow the gap between economic theory and practical industrial application.
+
+Objectives
+
+● Understand what macro finance is and the relationship between the macroeconomy and financial markets, and how these give rise to a natural backdrop of investing across asset classes.
+
+● Understand how macro and multi-asset investors approach investing differently from investing in a single asset class.
+
+● Understand examples of both the approach to building and the optimal execution and implementation of macro/multi-asset trading strategies.
+
+● Generate your own macro/multi-asset trading strategies.
+
+● Understand it is essential that risk managers understand macroeconomic variables, their cross-asset implications and spillovers, and how doing so drastically improves their management of risk.
+
+● Conduct your own risk analysis from the perspective of a macro/multi-asset risk manager.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Ian Wright
+
+Concentration: Trading
+
+Syllabus
+
+Online Program
+
+Quarter: Spring 2026
+
+Instructor: Ian Wright
+
+Syllabus

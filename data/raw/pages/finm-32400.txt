@@ -1,0 +1,17 @@
+Software Developer Tools for Finance
+
+This course builds on students’ Python skills to bridge the gap between exploratory coding and production-quality software for financial data science. Students deepen their understanding of core data science libraries such as NumPy, Pandas, and Scikit-learn, while also learning professional software engineering practices. The course emphasizes writing reproducible, auditable, maintainable, and performant code using tools like Git, conda, mypy, ruff, and pytest. Students also gain experience working with financial data, handling streaming data, and scaling code to large datasets with Spark. By the end of the course, students will be equipped to develop robust, production-ready code for real-world financial applications.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Shahbaz Chaudhary
+
+Syllabus
+
+Online Program
+
+Quarter: Summer 2026
+
+Instructor: Shahbaz Chaudhary

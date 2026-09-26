@@ -1,0 +1,16 @@
+[
+  {"tag": "convex-optimization", "category": "math",
+   "name": "Convex sets and functions, and the named families (LP, QP, SOCP, SDP) a solver handles globally"},
+  {"tag": "duality-and-kkt", "category": "math",
+   "name": "Lagrangian duality, weak and strong duality, KKT conditions and multipliers as shadow prices"},
+  {"tag": "unconstrained-optimization", "category": "math",
+   "name": "Line searches, steepest descent, Newton, quasi-Newton, Gauss-Newton and root finding in one variable"},
+  {"tag": "constrained-optimization", "category": "math",
+   "name": "Projection, penalty, barrier, augmented Lagrangian and interior-point methods for constrained programs"},
+  {"tag": "proximal-methods", "category": "math",
+   "name": "Subgradients, proximal operators, soft-thresholding, ISTA/FISTA and ADMM splitting for nonsmooth objectives"},
+  {"tag": "robust-optimization", "category": "risk",
+   "name": "Worst-case optimisation over an uncertainty set, robust counterparts, and the equivalence with regularisation"},
+  {"tag": "model-calibration", "category": "pricing",
+   "name": "Fitting model parameters to observed market quotes as a nonlinear least-squares problem, and its identifiability"}
+]

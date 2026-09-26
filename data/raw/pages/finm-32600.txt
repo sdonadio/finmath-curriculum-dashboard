@@ -1,0 +1,31 @@
+Computing for Finance in C++
+
+Computing for Finance in C++ introduces C++ from the ground up, high-lighting features of modern C++ to write reliable and performance sensitive applications in quantitative finance field. This is a hands-on course where real-world problems are used to introduce new concepts and language features using a practical and problem-driven approach.
+
+Beginners who have not had any prior exposure to C++ and students who have had some exposure to C++ but have not yet studied modern C++ systematically can benefit from this course.
+
+We use carefully selected real-world quantitative finance applications to:
+
+- Learn the fundamentals of programming, Modern C++, Object-Oriented and Generic programming concepts.
+
+- Illustrate the full software development life cycle.
+
+- Learn how to write good quality programs using proper programming practices.
+
+We generally start with a simple (perhaps not elegant) solution to a problem, which, everyone regardless of their C++ skill levels can easily understand. We then go on to discuss ways to enhance and improve the program by introducing advanced concepts and language features step-by-step
+
+Trade-offs of various design choices at each stage are discussed to help everyone understand why we do what we do, so that students gain practical insights and immediately applicable skills to solve any computing problem in the industry or in academia later on.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Chanaka Liyanaarachchi
+
+Concentration: Financial Computing
+
+Syllabus
+
+Online Program
+
+Quarter: TBD

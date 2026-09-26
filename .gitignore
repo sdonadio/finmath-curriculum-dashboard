@@ -1,0 +1,5 @@
+notes/shots/
+notes/*.log
+__pycache__/
+.DS_Store
+*.pyc

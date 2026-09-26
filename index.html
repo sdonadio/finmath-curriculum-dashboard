@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Curriculum Arena</title>
+<meta name="description" content="The whole curriculum on one page: every course, what it teaches, what it assumes, and where it is used again." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="index">
+
+<nav class="top" id="nav" aria-label="Site"></nav>
+
+<main id="app">
+
+  <!-- ══════════ HERO ══════════ -->
+  <section id="hero">
+    <div class="kicker" id="hKicker">Curriculum map</div>
+    <h1><span data-sp="program">The programme</span><br /><span class="thin">every course, in one place</span></h1>
+    <p class="lead">Each card is a course with its own deep page: the week-by-week content, runnable
+      code, interactive widgets, the questions that come back in interviews, and the skills it builds
+      and assumes. Filter by block, concentration, quarter or skill; hover a card to see what it needs
+      first and what needs it later.</p>
+    <div class="stats" id="hStats"></div>
+    <p class="progline" id="progLine">&nbsp;</p>
+    <div class="bar slim" style="max-width:520px"><i id="barAll"></i></div>
+    <div class="links" id="hLinks"></div>
+  </section>
+
+  <!-- ══════════ FILTERS ══════════ -->
+  <section id="filters-sec" aria-labelledby="flH">
+    <div class="kicker">Find a course</div>
+    <h2 id="flH">Filter the map</h2>
+    <div class="filters" role="search">
+      <label class="fl"><span>Search code, title, skill</span>
+        <input type="search" id="fQ" placeholder="e.g. stochastic calculus, C++, VaR" autocomplete="off" /></label>
+      <label class="fl"><span>Block</span><select id="fBlock"></select></label>
+      <label class="fl"><span>Concentration</span><select id="fConc"></select></label>
+      <label class="fl"><span>Quarter</span><select id="fQtr"></select></label>
+      <label class="fl"><span>Skill</span><select id="fSkill"></select></label>
+      <label class="fl"><span>Page</span>
+        <select id="fWritten">
+          <option value="">Any</option>
+          <option value="yes">Deep page written</option>
+          <option value="no">Not written yet</option>
+        </select></label>
+      <div><button class="btn" type="button" id="btnClearF">Clear filters</button></div>
+    </div>
+    <p class="sub" id="fCount" style="margin-top:10px">&nbsp;</p>
+  </section>
+
+  <!-- ══════════ THE MAP ══════════ -->
+  <section id="map-sec" aria-labelledby="mapH">
+    <div class="kicker">The degree</div>
+    <h2 id="mapH">Blocks, concentrations, courses</h2>
+    <div id="map"></div>
+  </section>
+
+  <!-- ══════════ CONCENTRATIONS ══════════ -->
+  <section id="conc-sec" aria-labelledby="concH">
+    <div class="kicker">Concentrations</div>
+    <h2 id="concH">Five ways through the electives</h2>
+    <div class="cgrid" id="concGrid"></div>
+  </section>
+
+  <!-- ══════════ COMPONENTS ══════════ -->
+  <section id="comp-sec" aria-labelledby="compH">
+    <div class="kicker">Beyond the classroom</div>
+    <h2 id="compH">The other components</h2>
+    <div class="cgrid" id="compGrid"></div>
+  </section>
+
+  <!-- ══════════ HOW TO USE / PRIVACY ══════════ -->
+  <section id="about-sec" aria-labelledby="abH">
+    <div class="kicker">How to use this</div>
+    <h2 id="abH">Your progress lives in this browser only</h2>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel tight">
+        <h3>What a course page is for</h3>
+        <p class="sub">A course page is a study guide, not a syllabus. Read a week before the lecture to
+        know what is coming; read it after to check you can answer the questions without notes. Every
+        code block on it was actually executed and its printed output stored, so nothing on the page
+        claims a result the code does not produce. Each page prints cleanly if you would rather work on
+        paper.</p>
+      </div>
+      <div class="panel tight">
+        <h3>Privacy</h3>
+        <p class="sub">Weeks you have opened and questions you have answered are stored in
+        <em class="hi">this browser only</em> (localStorage). Nothing is sent anywhere, no account is
+        involved, and no instructor can see it. Clearing your browser data clears your progress.</p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn danger" type="button" id="btnReset" data-sweep="skip">Reset my progress</button>
+          <a class="btn" href="skills.html">Browse all skills</a>
+          <a class="btn" href="quarter.html">See the load by quarter</a>
+        </div>
+        <p class="sub" id="lsWarn" hidden style="color:var(--warn);margin-top:10px">This browser is
+        blocking local storage, so progress will be lost when you leave the page.</p>
+      </div>
+    </div>
+    <p class="srcnote" id="srcNote"></p>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="site_params.js"></script>
+<script src="program.js"></script>
+<script src="skills.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

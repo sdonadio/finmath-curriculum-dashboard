@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>FINM 34500 · Curriculum Arena</title>
+<meta name="description" content="A week-by-week study guide for one course: concepts, runnable code, interactive widgets, pitfalls, self-check questions and interview questions." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="course">
+
+<nav class="top" id="nav" aria-label="Site"></nav>
+
+<!-- Sticky week navigator (filled by app.js; hidden until a course loads) -->
+<nav class="weeknav noprint" id="weeknav" aria-label="Weeks" hidden></nav>
+
+<main id="app">
+
+  <!-- ══════════ 1 · HEADER ══════════ -->
+  <section id="hero">
+    <div class="kicker" id="hKicker"></div>
+    <h1><span id="hCode"></span> <span class="thin" id="hTitle"></span></h1>
+    <div class="row" id="hBadges" style="margin-top:10px"></div>
+    <p class="lead" id="hDesc"></p>
+    <div class="stats" id="hStats"></div>
+    <div class="bar slim" style="max-width:520px;margin-top:14px"><i id="barAll"></i></div>
+    <p class="progline" id="progLine">&nbsp;</p>
+    <div class="links" id="hLinks"></div>
+    <p class="banner" id="banner"></p>
+  </section>
+
+  <!-- ══════════ 2 · BEFORE YOU START ══════════ -->
+  <section id="pre-sec" aria-labelledby="preH">
+    <div class="kicker">Before week 1</div>
+    <h2 id="preH">What this course assumes, and what it will give you</h2>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel tight" id="preReq"></div>
+      <div class="panel tight" id="preBooks"></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel tight" id="skBuilt"></div>
+      <div class="panel tight" id="skAssumed"></div>
+    </div>
+    <h3 style="margin-top:26px">Brush up on these first</h3>
+    <div id="brush"></div>
+  </section>
+
+  <!-- ══════════ 3 · THE WEEKS ══════════ -->
+  <section id="weeks-sec" aria-labelledby="wkH">
+    <div class="kicker">Week by week</div>
+    <h2 id="wkH">The course</h2>
+    <p class="lead" id="wkLead">Every concept below is explained, given a formula where one exists, and
+      shown as code whose printed output was captured by running it. Answer the check questions before
+      you read the feedback.</p>
+    <div class="row noprint" style="margin:14px 0 0">
+      <button class="btn" type="button" id="btnExpand">Expand every week</button>
+      <button class="btn" type="button" id="btnCollapse">Collapse all</button>
+      <button class="btn" type="button" id="btnPrint">Print this page</button>
+    </div>
+    <div id="weeks"></div>
+  </section>
+
+  <!-- ══════════ 4 · INTERVIEW ══════════ -->
+  <section id="iv-sec" aria-labelledby="ivH">
+    <div class="kicker">Interview</div>
+    <h2 id="ivH">Questions this course answers in an interview</h2>
+    <p class="lead">Say your answer out loud before you open one.</p>
+    <div class="row noprint" style="margin-bottom:14px">
+      <button class="btn" type="button" id="btnRevealAll">Reveal all</button>
+      <button class="btn" type="button" id="btnHideAll">Hide all</button>
+    </div>
+    <div id="iv"></div>
+  </section>
+
+  <!-- ══════════ 5 · REAPPEARS IN ══════════ -->
+  <section id="re-sec" aria-labelledby="reH">
+    <div class="kicker">Later in the degree</div>
+    <h2 id="reH">Where this comes back</h2>
+    <div class="cgrid" id="reappears"></div>
+  </section>
+
+  <!-- ══════════ 6 · GLOSSARY ══════════ -->
+  <section id="gl-sec" aria-labelledby="glH">
+    <div class="kicker">Glossary</div>
+    <h2 id="glH">The words this course uses precisely</h2>
+    <dl class="gloss" id="glossary"></dl>
+  </section>
+
+  <!-- ══════════ 7 · PREV / NEXT ══════════ -->
+  <section id="nav-sec" class="noprint" aria-label="Course navigation">
+    <div class="pn" id="pn"></div>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="site_params.js"></script>
+<script src="program.js"></script>
+<script src="skills.js"></script>
+<script src="widgets.js"></script>
+<!-- Static wrapper for FINM 34500.
+     Regenerate with tools/make_course_pages.py after editing the template. -->
+<script>window.COURSE_CODE = "FINM 34500"; window.COURSE_SLUG = "finm-34500";</script>
+<script src="app.js"></script>
+</body>
+</html>

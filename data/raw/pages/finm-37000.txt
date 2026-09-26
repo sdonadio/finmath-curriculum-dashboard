@@ -1,0 +1,21 @@
+Futures and Related Derivatives
+
+This course will serve as an introduction to futures and related derivatives by providing a survey of models and tools that are useful to a quantitative analyst working with these products. In addition to covering the structures and data of various futures markets, the course will emphasize methods for measuring and trading volatility, including coverage of options on futures. These markets have a variety of quantitative problems, so the course will cover a broad selection of useful tools from linear algebra, stochastic processes, Monte Carlo methods, and machine learning with an emphasis on how to apply these methods in Python. Applications will focus on using real market data when applying models.
+
+Students will learn about the structure of futures market data using examples from CME Group products through Databento.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Eric Patterson
+
+Concentration: Options and Derivatives
+
+Syllabus
+
+Online Program
+
+Quarter: Summer 2026
+
+Instructor: Eric Patterson

@@ -1,0 +1,13 @@
+The Analysis of High Frequency Data
+
+This course is an introduction to the econometric analysis of high-frequency financial data. This is where the stochastic models of quantitative finance meet the reality of how the process really evolves. The course is focused on the statistical theory of how to connect the two, but there will also be some data analysis. With some additional statistical background (which can be acquired after the course), the participants will be able to read articles in the area. The statistical theory is longitudinal, and it thus complements cross-sectional calibration methods (implied volatility, etc.). The course also discusses volatility clustering and market microstructure.
+
+Students are encouraged to take FINM 34500 prior to or concurrently with FINM 34600.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Per A. Mykland
+
+Concentration: Machine Learning and AI

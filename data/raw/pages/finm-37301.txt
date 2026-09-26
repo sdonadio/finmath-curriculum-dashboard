@@ -1,0 +1,21 @@
+Foreign Exchange: Markets, Products & Pricing
+
+This course will examine international currency markets, financial products, and applications of quantitative models with an emphasis on the quantitative methods and derivative products in common use today. Topics will include a) pricing for FX products in theory and in practice, specifically spot, forward, futures, deposits, cross-currency swaps, non-deliverable contracts, and FX options, b) FX markets in practice, exchange rate regimes, international monetary systems, FX modeling and forecasting, and c) practical market applications of FX options, exotic options, and hybrid products.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Anthony Capozzoli
+
+Concentration: Rates and Credit
+
+Syllabus
+
+Online Program
+
+Quarter: Winter 2026
+
+Instructor: Anthony Capozzoli
+
+Syllabus

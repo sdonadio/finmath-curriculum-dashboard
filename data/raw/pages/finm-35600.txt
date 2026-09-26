@@ -1,0 +1,27 @@
+Institutional Crypto Markets: Liquidity and Mechanism Design
+
+This practitioner-led course teaches graduate students the market structure of digital asset markets and the business of institutional liquidity provision: how exchanges and derivative instruments are designed, how venues and protocols incentivize liquidity, and how institutional trading firms price and deliver it. Delivered in an intensive five-week format (one session per week), the course moves from the economics of liquidity provision, through the mechanism design of the instruments and venues that dominate digital asset trading (perpetual futures, the oracle and index infrastructure that marks them, and the exchanges that list them), to the design of liquidity programs for both crypto-native tokens and tokenized real-world assets (RWAs). Throughout, knowledge is taught through weekly case studies: each week’s mechanics are applied to a realistic scenario, progressing from structured computation to open-ended market and program design, and culminating in the final project.
+
+Students will learn to analyze exchange mechanics and liquidity channels across the digital asset ecosystem, from centralized order-book venues to DeFi protocols; understand perpetual futures from the contract up: margin and leverage, index/mark/last price construction, funding as the convergence mechanism, and the oracle designs that determine what price liquidates a position; evaluate the economics of providing liquidity using trading-desk metrics (ROC, cost of capital, capital velocity, NPV/IRR, break-even, and capital structure); value the token-based incentives venues and protocols use to attract liquidity, including embedded options and forward-start tranches, and understand how the resulting book is hedged on perpetual venues; design deliverable liquidity KPI schedules calibrated to empirical market data; analyze mechanism design risk across venue and protocol architectures (oracle manipulation, redemption windows, bridge failures, validator concentration); and design market-making programs for tokenized equities, treasuries, and commodities. Order-book/CLOB venues are treated as the primary liquidity context, with AMM/DEX liquidity covered as a supporting venue.
+
+The central insight of the course is that liquidity in digital asset markets is actively designed and paid for. Exchanges and protocols compete for it through fee and pricing programs, designated market maker agreements, token incentives, and listing design; institutional trading firms deploy quantitative infrastructure not just to capture spread, but to fulfill contracted service obligations with contracted compensation subject to performance and counterparty risk. The quantitative challenge is in pricing these commitments correctly: knowing your cost of capital, modeling the embedded optionality in token compensation, understanding the perpetual-futures infrastructure used to hedge and mark these markets, and designing KPIs that are simultaneously attractive to counterparties and deliverable by a trading desk.
+
+Critically, this course teaches students how to think using a quantitative and trader mindset, not to arrive at a single “correct” answer. In practice, market structure evolves quickly, and the real questions involve ambiguity, competing incentives, and imperfect information. The goal is to build a reasoning framework that produces defensible, well-justified analysis and design, not formulaic outputs.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Chris Newhouse
+
+Concentration: Rates and Credit
+
+Syllabus
+
+Online Program
+
+Quarter: Summer 2026
+
+Instructor: Chris Newhouse
+
+Syllabus

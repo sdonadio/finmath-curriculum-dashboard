@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Skills · Curriculum Arena</title>
+<meta name="description" content="Every skill the curriculum teaches, which courses build it and which courses assume you already have it." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="skills">
+
+<nav class="top" id="nav" aria-label="Site"></nav>
+
+<main id="app">
+
+  <section id="hero">
+    <div class="kicker">Skills</div>
+    <h1>Teaches, and assumes</h1>
+    <p class="lead">One shared vocabulary across the whole degree. A skill is <em class="hi">built</em>
+      by the courses that teach it and <em class="hi">assumed</em> by the courses that expect you to
+      arrive with it. A skill that is assumed more often than it is built is a gap worth knowing about
+      before you pick a schedule.</p>
+    <div class="stats" id="hStats"></div>
+    <div class="links" id="hLinks"></div>
+  </section>
+
+  <section id="cat-sec" aria-labelledby="catH">
+    <div class="kicker">Catalogue</div>
+    <h2 id="catH">Filter and search</h2>
+    <div class="filters" role="search" style="margin-top:14px">
+      <label class="fl"><span>Search skill</span>
+        <input type="search" id="fQ" placeholder="e.g. martingale, numerical linear algebra" autocomplete="off" /></label>
+      <label class="fl"><span>Category</span><select id="fCat"></select></label>
+      <label class="fl"><span>Course</span><select id="fCourse"></select></label>
+      <label class="fl"><span>Balance</span>
+        <select id="fBal">
+          <option value="">Any</option>
+          <option value="gap">Assumed but never built</option>
+          <option value="built">Built somewhere</option>
+          <option value="hub">Built by 3+ courses</option>
+        </select></label>
+      <div><button class="btn" type="button" id="btnClearF">Clear filters</button></div>
+    </div>
+    <p class="sub" id="fCount" style="margin-top:10px">&nbsp;</p>
+    <div class="tablewrap">
+      <table class="cat">
+        <caption class="sub" style="text-align:left;padding:10px 0 12px">
+          Every skill tag in the curriculum. Follow a course code to its deep page.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Skill</th>
+            <th scope="col">Category</th>
+            <th scope="col">Built by</th>
+            <th scope="col">Assumed by</th>
+            <th scope="col">Balance</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="empty" hidden>No skill matches those filters.</p>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="site_params.js"></script>
+<script src="program.js"></script>
+<script src="skills.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

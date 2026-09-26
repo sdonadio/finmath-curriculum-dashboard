@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>By quarter · Curriculum Arena</title>
+<meta name="description" content="The curriculum laid out by quarter: what is offered when, how the units fall, and which prerequisites must already be done." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="quarter">
+
+<nav class="top" id="nav" aria-label="Site"></nav>
+
+<main id="app">
+
+  <section id="hero">
+    <div class="kicker">The year</div>
+    <h1>The curriculum by quarter</h1>
+    <p class="lead">What is offered when. Use it to see whether a sequence you want is actually
+      schedulable: a course can only follow its prerequisites if they are offered in an earlier
+      quarter than it is.</p>
+    <div class="stats" id="hStats"></div>
+    <div class="links" id="hLinks"></div>
+  </section>
+
+  <section id="filters-sec" aria-labelledby="qfH">
+    <div class="kicker">Narrow it down</div>
+    <h2 id="qfH">Filter</h2>
+    <div class="filters" role="search">
+      <label class="fl"><span>Search</span>
+        <input type="search" id="fQ" placeholder="code, title or skill" autocomplete="off" /></label>
+      <label class="fl"><span>Block</span><select id="fBlock"></select></label>
+      <label class="fl"><span>Concentration</span><select id="fConc"></select></label>
+      <label class="fl"><span>Quarter</span><select id="fQtr"></select></label>
+      <div><button class="btn" type="button" id="btnClearF">Clear filters</button></div>
+    </div>
+    <p class="sub" id="fCount" style="margin-top:10px">&nbsp;</p>
+  </section>
+
+  <section id="cols-sec" aria-labelledby="colH">
+    <div class="kicker">Offerings</div>
+    <h2 id="colH">One column per quarter</h2>
+    <div class="qcols" id="qcols"></div>
+  </section>
+
+  <section id="seq-sec" aria-labelledby="seqH">
+    <div class="kicker">Sequencing</div>
+    <h2 id="seqH">Prerequisites that cross a quarter boundary</h2>
+    <p class="lead">Every prerequisite edge the course pages declare, with the quarter each side is
+      offered in. A row is flagged when the prerequisite is not offered before the course that needs it.</p>
+    <div class="tablewrap">
+      <table class="cat" id="seqTable">
+        <thead><tr>
+          <th scope="col">Course</th><th scope="col">Offered</th>
+          <th scope="col">Needs first</th><th scope="col">Offered</th><th scope="col">Order</th>
+        </tr></thead>
+        <tbody id="seqBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="site_params.js"></script>
+<script src="program.js"></script>
+<script src="skills.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

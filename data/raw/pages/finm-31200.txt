@@ -1,0 +1,21 @@
+Blockchain and Cryptoassets for Finance
+
+Since before the invention of reeding for the edges of coins, technology has been closely involved with money. The rise of cryptotokens and associated cryptocurrencies is the latest manifestation of their entanglement.
+
+This class is aimed at understanding crypto from the point of view of finance professionals. We will study some of the basic concepts in crypto, and then quickly move on to the world of smart contracts and emissions, cryptotokens' analogs to derivatives and interest-bearing securities.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructors: Brian Boonstra
+
+Concentration: Rates and Credit
+
+Syllabus
+
+Online Program
+
+Quarter: Winter 2027
+
+Instructor: TBD

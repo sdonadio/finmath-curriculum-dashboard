@@ -1,0 +1,21 @@
+Generative and Agentic AI for Finance
+
+Generative and agentic AI is expanding the toolbox of the quantitative practitioner. This course focuses on the application layer of the AI stack—from consumer-facing tools like Claude Code and Cursor to developer-facing infrastructure: LLM APIs (OpenAI, OpenRouter), agentic frameworks (LangGraph), vector databases, and the Model Context Protocol (MCP).
+
+Topics progress from prompt engineering and API programming to agentic architectures that connect LLMs to financial databases and analytical pipelines. Finance applications include extraction of structured data from SEC filings, Deep Research agents that produce analyst-grade reports, and reinforcement learning for trading decisions.
+
+The course is taught through weekly hands-on exercises where students build agentic workflows, culminating in a final project. There is no final exam. Prior completion of FINM 32900 (Full-Stack Quantitative Finance) is recommended. Prerequisites include advanced Python proficiency and basic backgrounds in statistics and finance.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructors: Jeremy Bejarano , and Mark Hendricks
+
+Concentration: Machine Learning and AI
+
+Syllabus
+
+Online Program
+
+Quarter: TBD

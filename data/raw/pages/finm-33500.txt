@@ -1,0 +1,21 @@
+Systematic Trading Technologies
+
+The Python engineering behind systematic trading, taught by building the systems that quant desks run on. Systematic trading is the part of finance where a strategy is not a person’s judgement but a program: it reads market data, decides, executes and manages risk, thousands of times a day, and someone has to write, test and operate that program. The people who do it are called quant researchers and quant developers, and the skills they use every day are engineering skills applied to markets: concurrent programming, protocols, data pipelines, backtesting, complexity, machine learning done honestly, and the discipline to ship code that runs live.
+
+This course teaches those skills in Python, and it teaches them by building. Over nine weekly sessions you write the software of a trading floor, one component per week, and run it against real market data and against your classmates. By December you will understand how systematic trading works from the order book up, and you will be able to build and operate the software yourself.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Sebastien Donadio
+
+Syllabus
+
+Online Program
+
+Quarter: Winter 2026
+
+Instructor: Sebastien Donadio
+
+Syllabus

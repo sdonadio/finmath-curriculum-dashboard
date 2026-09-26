@@ -1,0 +1,71 @@
+Any FINM course (with the exception of Core Courses and the Computing requirement) counts towards the Elective units needed for degree completion.
+
+900 Units Needed for Degree Completion
+
+Winter Quarter
+
+FINM 32600 - Computing for Finance in C++ (100 units)
+
+FINM 33150 - Quantitative Trading Strategies (100 units)
+
+FINM 33160 - Machine Learning for Finance (100 units)
+
+FINM 34500 - Stochastic Calculus (100 units)
+
+FINM 34600 - The Analysis of High Frequency Data (100 units)
+
+FINM 37400 - Fixed Income (50 units)
+
+FINM 37500 - Fixed Income Derivatives (50 units)
+
+Spring Quarter
+
+FINM 32000 - Options: Numerical Methods (100 units)
+
+FINM 32700 - Low Latency Trading Systems (100 units)
+
+FINM 32950 - High-Performance Numerical Computing for Finance (50 units)
+
+FINM 33200 - Generative and Agentic AI for Finance (100 units)
+
+FINM 34700 - Multivariate Statistical Analysis (100 units)
+
+FINM 35100 - Information, Trading, and the Structure of Markets (100 units)
+
+FINM 35700 - Credit Markets (100 units)
+
+FINM 35900 - Macro-Finance (50 units)
+
+FINM 37301 - Foreign Exchange: Markets, Products, and Pricing (50 units)
+
+Autumn Quarter
+
+FINM 31200 - Blockchain and Cryptoassets for Finance (50 units)
+
+FINM 33100 - Foundations of Applied Machine Learning (50 units)
+
+FINM 33165 - Reinforcement Learning and Deep Learning (100 units)
+
+FINM 34800 - Modern Applied Optimization (100 units)
+
+FINM 35600 - Institutional Crypto Markets: Liquidity and Mechanism Design (50 units)
+
+FINM 37000 - Futures and Related Derivatives (50 units)
+
+FINM 37601 - Mathematical Market Microstructure: An Optimization Approach (100 units)
+
+A number of courses offered by other programs and schools at the University of Chicago are approved to count towards the elective requirements. A partial list can be found here . At least 600 elective units taken by MSFM students must be strictly from FINM courses.
+
+All Elective units count towards one of the following degree concentrations:
+
+Financial Computing
+
+Machine Learning and AI
+
+Options and Derivatives
+
+Rates and Credit
+
+Trading
+
+Please note that the schedule and course offerings listed above are unique to the in-person program. Both course offerings and dates listed are for the 2026-27 year and are subject to change for future years.

@@ -1,0 +1,21 @@
+Reinforcement Learning and Deep Learning
+
+Reinforcement Learning (RL) is actually quite an old discipline, going back to WW2. The fundamental equation, the Bellman Equation, goes back to those times.
+
+With the development of Machine Learning and Neural Networks, RL has re-emerged as an important tool in Artificial Intelligence (AI). The first breakthrough came when the DeepMind group was able to use RL to teach a computer to play some of the classical Atari games at a super-human level.
+
+The big eye-opener came when DeepMind wrote AlphaGO, a program that can play the game of GO at a level where it is able to beat world champion GO players.
+
+Recently, RL has been used in the latest versions of some of the Large Language Models (LLMs) such as ChatGPT, Grok3, and in particular DeepSeek. RL models are now widely used in LLM code generation and to make LLM responses more human-like.
+
+Prerequisites: Linear algebra, calculus, probability theory (such as FINM 34000 - Probability and Stochastic Processes ), and basic programming skills in Python.
+
+In-Person Program
+
+Quarter: Autumn Quarter
+
+Instructor: Niels Nygaard
+
+Concentration: Machine Learning and AI
+
+Syllabus

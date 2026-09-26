@@ -1,0 +1,12 @@
+[
+  {
+    "tag": "realised-volatility",
+    "category": "stats-ml",
+    "name": "Realised measures of volatility: realised variance, bipower and kernel estimators, and their limit theory"
+  },
+  {
+    "tag": "jump-detection",
+    "category": "stats-ml",
+    "name": "Separating jumps from diffusive moves: truncation, bipower ratios and extreme-value jump tests"
+  }
+]

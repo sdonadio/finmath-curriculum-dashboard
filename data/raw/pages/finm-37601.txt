@@ -1,0 +1,21 @@
+Mathematical Market Microstructure: An Optimized Approach
+
+Market Microstructure is a sub-field in finance and focuses on price formation processes at small time scale (or, high frequency level) and related market participants’ behaviors that can be both the causes and the consequences of asset price dynamics. The advancement in technologies in areas of communication, computational power and, recently, artificial intelligence, has revolutionized or is in the process of revolutionizing studies of market microstructure, both academically and practically. This course focuses on providing a balanced view of the subject with both rigorous mathematical treatment of relevant problems and practical industry discussions related to secondary market trading and risk management. The course also evolved over the past 13 years by incorporating recent developments in industry and technologies (such as the applications of machine learning techniques in market microstructure research and practices), new academic research results by both the instructor and other academic researchers, and emerging new practices from various markets across the globe.
+
+For the autumn quarter of 2026-2027 academic year, the course will continue to provide balanced views, with about half of the content focusing on theories and academic research results, and the other half on overviews and discussions on industry practices across global and local markets.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Hongsong Chou
+
+Concentration: Trading
+
+Syllabus
+
+Online Program
+
+Quarter: Autumn 2026
+
+Instructor: Hongsong Chou

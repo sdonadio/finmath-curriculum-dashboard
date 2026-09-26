@@ -1,0 +1,19 @@
+Machine Learning for Finance
+
+We are going to construct a large data set of fundamental factors of stocks. Using various ML models: Decision Trees, Random Forests, Gradient Boosting, etc., we use this data set to design an algorithmic trading strategy. Thus, the course will focus more on practical applications than on the mathematics behind the algorithms, though we will explain some of the ideas behind them.
+
+The course will be very computationally intensive, and we will use many Python packages for training and back-testing the models. We will learn to perform an extensive statistical analysis of the results of back tests.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Niels Nygaard
+
+Concentration: Machine Learning and AI
+
+Syllabus
+
+Online Program
+
+Quarter: TBD

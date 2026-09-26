@@ -1,0 +1,17 @@
+Options
+
+Introduction to the theory of arbitrage-free pricing and hedging of financial derivatives. Topics include: Arbitrage; Fundamental theorems of asset pricing; Binomial and other discrete models; Black-Scholes and other continuous-time Gaussian models in one-dimensional and multidimensional settings; PDE and martingale methods; Change of numeraire.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Roger Lee
+
+Syllabus
+
+Online Program
+
+Online: Autumn 2026
+
+Instructor: Roger Lee

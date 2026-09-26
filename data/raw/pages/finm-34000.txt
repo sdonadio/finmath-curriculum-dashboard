@@ -1,0 +1,35 @@
+Probability and Stochastic Processes
+
+This course provides a mathematical introduction to probability and stochastic processes. While the main focus is discrete probability and combinatorial analysis, some continuous probability is discussed. Examples and applications are emphasized over theory.
+
+The main topics in approximate order are:
+
+Conditional Expectation
+
+Simple Random Walk
+
+Markov Chains
+
+Martingales in discrete time
+
+Poisson and some other jump process
+
+A first introduction to Brownian motion
+
+The mathematical prerequisite for the course is an undergraduate (post-calculus) course in probability and/or statistics.
+
+In-Person Program
+
+Quarter: September Launch (This course takes place in the month of September, prior to the start of Autumn Quarter for the in-person cohort.)
+
+Instructor: Greg Lawler
+
+Syllabus
+
+Online Program
+
+Quarter: Winter 2026
+
+Instructor: TBD
+
+Syllabus

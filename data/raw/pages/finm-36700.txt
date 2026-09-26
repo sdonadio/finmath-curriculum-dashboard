@@ -1,0 +1,23 @@
+Portfolio and Risk Management
+
+The course begins by covering the classic foundations of portfolio theory, including meanvariance mathematics and the standard equity factor models used in attribution, risk management, and pricing. Other fundamental topics include tail-risk, long-run returns, and forecasting returns.
+
+Advanced topics include advanced pricing models, allocation beyond mean-variance optimization, multivariate forecasting strategies, and cross-assess carry.
+
+A key part of the course are the weekly homework assignments consisting of applied problems that use real data and case studies. In everything, we emphasize model selection, interpretation, and issues in implementation. The goal of the course is to give students a strong foundation and modern perspective of Portfolio Theory through a synthesis of finance, math, statistics, and computing.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Mark Hendricks
+
+Syllabus
+
+Online Program
+
+Quarter: Winter 2026
+
+Instructor: Mark Hendricks
+
+Syllabus

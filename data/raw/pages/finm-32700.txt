@@ -1,0 +1,19 @@
+Low Latency Trading Systems
+
+This course is intended to teach programming concepts and techniques to students desiring to work in the financial sector. At the end of this class, students will have the necessary programming skills to be successful in their daily activities. We will cover the required skills to work as a quantitative researcher: advanced data structures (STL, Boost), parallel programming, inter-process communication, linear algebra computation, simulation and modeling. We will work on several projects aimed at building several trading strategies using C++. Classes are taught using a combination of lectures and in class hands-on lab sessions.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Sebastien Donadio
+
+Concentration: Financial Computing for Finance
+
+Syllabus
+
+Online Program
+
+Quarter: Autumn 2026
+
+Instructor: Sebastien Donadio

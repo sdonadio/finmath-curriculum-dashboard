@@ -1,0 +1,15 @@
+300 units needed (650 available*)
+
+Winter Quarter
+
+FINM 32600 - Computing for Finance in C++ (100 units)
+
+Spring Quarter
+
+FINM 32700 - Low Latency Trading Systems (100 units)
+
+FINM 32950 - High-Performance Numerical Computing for Finance (50 units)
+
+* Any course taken in excess of the 100 Computing requirements will count as Electives and toward the Financial Computing concentration.
+
+Please note that the schedule and course offerings listed above are unique to the in-person program. Both course offerings and dates listed are for the 2026-27 year and are subject to change for future years.

@@ -1,0 +1,37 @@
+Credit Markets
+
+The course objective is to introduce students to mathematical modeling, pricing and trading strategies for credit instruments.
+
+The course will cover:
+
+- corporate and sovereign bonds
+
+- credit default swaps (CDS) and credit default indices (CDX),
+
+- fixed income ETFs,
+
+- collateralized debt obligations (CDOs),
+
+- mortgage and municipal bonds.
+
+Real market data examples will be used for pricing and risk management.
+
+The students will have the opportunity to discuss various trading strategies with market practitioners, for a better insight into the "daily activity" of credit trading desks.
+
+A recommended prerequisite for Credit Markets is FINM 37400 - Fixed Income .
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Alex Popovici
+
+Concentration: Rates and Credit
+
+Syllabus
+
+Online Program
+
+Quarter: Autumn 2026
+
+Instructor: Alex Popovici

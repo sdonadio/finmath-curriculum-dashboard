@@ -1,0 +1,19 @@
+Data Pipelines for Quantitative Research
+
+Data Pipelines for Quantitative Research is a hands-on course centered on building reproducible analytical pipelines: data science workflows that are automated and fully reproducible from end to end—from extraction and cleaning (extract, transform, load, or ETL), through data validation, exploratory analysis, visualization, and modeling, to publication and deployment. The course teaches the core set of tools used to build such pipelines, tools which are common across computing and data science: build automation and CI/CD, dependency management, SQL, unit testing and automated data-quality checks, the Linux command line, Git for version control, and peer review through GitHub pull requests. These skills are taught through a series of case studies, each of which introduces students to a new set of tools and a new key financial data set: pricing and fundamentals from CRSPand Compustat, options data from OptionMetrics, corporate bond transactions from FINRA TRACE, intraday trades and quotes from NYSE TAQ, and order book data from CME Globex.
+
+Prior experience at an intermediate level with Python and the PyData stack is assumed.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Jeremy Bejarano
+
+Syllabus
+
+Online Program
+
+Quarter: Summer 2026
+
+Instructor: Jeremy Bejarano

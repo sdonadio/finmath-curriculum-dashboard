@@ -1,0 +1,23 @@
+Fixed Income
+
+This course covers the mathematical modeling, statistical analysis, and market features relevant for pricing and managing fixed income products. Key topics include the following: the yield curve; interest-rate risk via duration, convexity, and factor approaches; fixed-income products such as swaps, caps, and floors; trading strategies for rates, including inflation and the Expectations Hypothesis. This course does not cover specialized models for analyzing fixed-income derivatives or the issue of credit-risk. But it covers many fundamentals needed for those topics, which are covered in other FINM courses.
+
+The course uses weekly homework assignments consisting of applied problems that use real data and consider actual cases of fixed income risk, pricing, and trading. The course also has a final exam.
+
+In-Program Program
+
+Quarter: Winter
+
+Instructor: Mark Hendricks
+
+Concentration: Rates and Credit
+
+Syllabus
+
+Online Program
+
+Quarter: Spring 2026
+
+Instructor: Mark Hendricks
+
+Syllabus

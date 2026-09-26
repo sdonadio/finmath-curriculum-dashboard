@@ -1,0 +1,31 @@
+Project Lab allows students to work with industry partners on their firms' research projects. Students get to apply their coursework in new ways while getting a closer look at the challenges and opportunities in industry research. Project Lab is a 10-week collaboration, and each team is comprised of four-to-six students supported by an advisor. The course (FINM 36000) is typically offered every quarter, and students apply to specific firm projects. The project concludes with a final presentation to the firm and completion of specific project deliverables. Project Lab is a repeatable course, as many students find it a valuable way to build industry experience throughout the program.
+
+Below is a small sampling of firms that our students have worked with on projects:
+
+- Bank of America
+
+- Belvedere Trading
+
+- Cumberland Labs
+
+- Neuberger Berman
+
+- Northern Trust
+
+Students have worked on projects in the following areas:
+
+- Algorithmic trading based on sentiment and news
+
+- Risk management for illiquid and private securities
+
+- Options volatility modeling
+
+- Systematic macro strategies
+
+- Data analytics
+
+Employers interested in joining our Project Lab should contact Sue Clark . Prospective students interested in learning more about Project Lab should contact Financial Mathematics .
+
+Related Link
+
+- Curriculum Guide

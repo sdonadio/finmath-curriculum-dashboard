@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Options and Derivatives · Curriculum Arena</title>
+<meta name="description" content="One concentration: the units it needs, the courses that count towards it, the suggested paths through them, and the skills they build." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="concentration">
+
+<nav class="top" id="nav" aria-label="Site"></nav>
+
+<main id="app">
+
+  <section id="hero">
+    <div class="kicker" id="hKicker">Concentration</div>
+    <h1 id="hTitle"></h1>
+    <p class="lead" id="hBlurb"></p>
+    <div class="stats" id="hStats"></div>
+    <div class="links" id="hLinks"></div>
+  </section>
+
+  <section id="paths-sec" aria-labelledby="paH">
+    <div class="kicker">Suggested routes</div>
+    <h2 id="paH">Paths through the concentration</h2>
+    <p class="lead">A path is an order that works, not a rule. Each one is a sequence whose
+      prerequisites line up and whose skills stack.</p>
+    <div id="paths"></div>
+  </section>
+
+  <section id="courses-sec" aria-labelledby="coH">
+    <div class="kicker">Courses</div>
+    <h2 id="coH">Every course that counts towards it</h2>
+    <div class="filters" role="search" style="margin-top:14px">
+      <label class="fl"><span>Search</span>
+        <input type="search" id="fQ" placeholder="code or title" autocomplete="off" /></label>
+      <label class="fl"><span>Quarter</span><select id="fQtr"></select></label>
+      <div><button class="btn" type="button" id="btnClearF">Clear filters</button></div>
+    </div>
+    <div class="cards" id="courses"></div>
+  </section>
+
+  <section id="skills-sec" aria-labelledby="csH">
+    <div class="kicker">Skills</div>
+    <h2 id="csH">What the concentration builds</h2>
+    <p class="lead">Every skill tag taught by a course in this concentration, with how many of its
+      courses teach it. Follow a tag to see every course in the degree that touches it.</p>
+    <div class="taglist" id="concSkills"></div>
+  </section>
+
+  <section id="nav-sec" class="noprint" aria-label="Concentration navigation">
+    <div class="pn" id="pn"></div>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="site_params.js"></script>
+<script src="program.js"></script>
+<script src="skills.js"></script>
+<!-- Static wrapper for the Options and Derivatives concentration.
+     Regenerate with tools/make_course_pages.py after editing the template. -->
+<script>window.CONC_ID = "options-derivatives";</script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+Fixed Income Derivatives
+
+The course covers key models and techniques needed to manage and price fixed-income derivatives. Additionally, the course discusses practical market considerations in using fixed-income derivatives for trading, hedging, etc.
+
+Instruments include futures, swaps, swaptions, caps, and floors. Throughout, we focus on how these markets operate in practice and how models and techniques of the course are applied to these markets.
+
+The course explore key models in discrete and continuous time, with particular focus on interest-rate trees and Black's models. It also includes an introduction to modeling volatility and skew. This course does not cover the issue of credit-risk.
+
+Weekly homework assignments have an applied focus, using market data to test models, explore markets, and manage trades.
+
+The course has a proctored final exam.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Mark Hendricks
+
+Concentration: Options and Derivatives
+
+Syllabus
+
+Online Program
+
+Quarter: Spring 2026
+
+Instructor: Mark Hendricks
+
+Syllabus

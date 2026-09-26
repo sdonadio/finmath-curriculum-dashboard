@@ -1,0 +1,15 @@
+Multivariate Statistical Analysis: Applications and Techniques
+
+This course introduces statistical methods for analyzing, modeling, and interpreting multivariate and high-dimensional data. The focus is on understanding dependence structure, reducing dimensionality, uncovering latent patterns, and building predictive models. Topics include principal component analysis, factor models, canonical correlation analysis, clustering and mixture models, regularized regression (ridge and lasso), sparse methods, covariance estimation, and tree-based methods such as random forests.
+
+Emphasis is placed on geometric intuition, computational implementation, and practical modeling considerations rather than classical distribution theory. Students will gain experience applying these methods to real datasets and comparing linear and nonlinear approaches in modern data analysis settings.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Jingshu Wang
+
+Concentration: Machine Learning and AI
+
+Syllabus

@@ -1,0 +1,19 @@
+Stochastic Calculus
+
+The course starts with a quick introduction to martingales in discrete time, and then Brownian motion and the Ito integral are defined carefully. The main tools of stochastic calculus (Ito's formula, Feynman-Kac formula, Girsanov theorem, etc.) are developed. The treatment includes discussions of simulation and the relationship with partial differential equations. Some applications are given to option pricing, but much more on this is done in other courses. The course ends with an introduction to jump process (Levy processes) and the corresponding integration theory.
+
+In-Person Program
+
+Quarter: Winter
+
+Instructor: Greg Lawler
+
+Concentration: Options and Derivatives
+
+Syllabus
+
+*The first five weeks of Stochastic Calculus may be taken as FINM 34510: Stochastic Calculus I .
+
+Online Program
+
+Quarter: TBD

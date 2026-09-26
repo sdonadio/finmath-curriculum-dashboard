@@ -1,0 +1,23 @@
+300 units needed (650 available)
+
+Winter Quarter
+
+FINM 33160 - Machine Learning for Finance (100 units)
+
+FINM 34600 - The Analysis of High Frequency Data (100 units)
+
+Spring Quarter
+
+FINM 33200 - Generative and Agentic AI for Finance (100 units)
+
+FINM 34700 - Multivariate Statistical Analysis (100 units)
+
+Autumn Quarter
+
+FINM 33100 - Foundations of Applied Machine Learning (50 units)
+
+FINM 33165 - Reinforcement Learning and Deep Learning (100 units)
+
+FINM 34800 - Modern Applied Optimization (100 units)
+
+Please note that the schedule and course offerings listed above are unique to the in-person program. Both course offerings and dates listed are for the 2026-27 year and are subject to change for future years.

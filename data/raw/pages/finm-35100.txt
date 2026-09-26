@@ -1,0 +1,11 @@
+Information, Trading, and the Structure of Markets
+
+At the core of trading strategies that drive today’s markets lie foundational concepts in economics and statistics of information. This course provides a deep dive into these concepts, equipping students with both the theory and its practical application in modern financial markets. We will study topics like Bayesian inference in traditional trading systems; Backpropagation-based inference in artificial intelligence trading systems; vNM, Savage and Neural Network utilities; Information structures; Blackwell comparison of experiments and the price of information-extraction in markets; Harsanyi type spaces, common knowledge and financial no-trade theorems; Asymmetric information modeling in limit order books; LLM-based semantic information trading strategies; Scoring-rules based strategies in prediction markets; Proof-of-Stake/Work/AMM based strategies in crypto markets; etc. The subset of topics covered in each iteration of the course will be tailored to the interests of the enrolled cohort. The course will equip students with advanced tools that should be helpful both in industry and in research.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Ayan Bhattacharya
+
+Concentration: Trading

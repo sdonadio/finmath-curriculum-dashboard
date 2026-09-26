@@ -1,0 +1,179 @@
+{
+  "concentrations": {
+    "financial-computing": {
+      "id": "financial-computing",
+      "name": "Financial Computing",
+      "url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/financial-computing/",
+      "units_needed": 300,
+      "units_available": 650,
+      "courses": [
+        "32600",
+        "32700",
+        "32950"
+      ],
+      "listed_units": 250,
+      "index_pair": [
+        300,
+        650
+      ],
+      "blurb": "300 units needed (650 available*)"
+    },
+    "machine-learning-ai": {
+      "id": "machine-learning-ai",
+      "name": "Machine Learning and AI",
+      "url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/machine-learning-and-ai/",
+      "units_needed": 300,
+      "units_available": 650,
+      "courses": [
+        "33100",
+        "33160",
+        "33165",
+        "33200",
+        "34600",
+        "34700",
+        "34800"
+      ],
+      "listed_units": 650,
+      "index_pair": [
+        300,
+        600
+      ],
+      "blurb": "300 units needed (650 available)"
+    },
+    "options-derivatives": {
+      "id": "options-derivatives",
+      "name": "Options and Derivatives",
+      "url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/options-and-derivatives/",
+      "units_needed": 300,
+      "units_available": 300,
+      "courses": [
+        "32000",
+        "34500",
+        "37000",
+        "37500"
+      ],
+      "listed_units": 300,
+      "index_pair": [
+        300,
+        300
+      ],
+      "blurb": "300 units needed (300 available)"
+    },
+    "rates-credit": {
+      "id": "rates-credit",
+      "name": "Rates and Credit",
+      "url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/rates-and-credit/",
+      "units_needed": 300,
+      "units_available": 300,
+      "courses": [
+        "31200",
+        "35600",
+        "35700",
+        "37301",
+        "37400"
+      ],
+      "listed_units": 300,
+      "index_pair": [
+        300,
+        400
+      ],
+      "blurb": "300 units needed (300 availabile)"
+    },
+    "trading": {
+      "id": "trading",
+      "name": "Trading",
+      "url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/trading/",
+      "units_needed": 300,
+      "units_available": 350,
+      "courses": [
+        "33150",
+        "35100",
+        "35900",
+        "37601"
+      ],
+      "listed_units": 350,
+      "index_pair": [
+        300,
+        300
+      ],
+      "blurb": "300 units needed (350 available)"
+    }
+  },
+  "blocks": {
+    "34000": "core",
+    "33000": "core",
+    "36700": "core",
+    "32400": "computing",
+    "32800": "computing",
+    "33500": "computing",
+    "32600": "electives",
+    "33150": "electives",
+    "33160": "electives",
+    "34500": "electives",
+    "34600": "electives",
+    "37400": "electives",
+    "37500": "electives",
+    "32000": "electives",
+    "32700": "electives",
+    "32950": "electives",
+    "33200": "electives",
+    "34700": "electives",
+    "35100": "electives",
+    "35700": "electives",
+    "35900": "electives",
+    "37301": "electives",
+    "31200": "electives",
+    "33100": "electives",
+    "33165": "electives",
+    "34800": "electives",
+    "35600": "electives",
+    "37000": "electives",
+    "37601": "electives"
+  },
+  "units": {
+    "34000": 50,
+    "33000": 100,
+    "36700": 100,
+    "32400": 100,
+    "32800": 100,
+    "33500": 100,
+    "32600": 100,
+    "33150": 100,
+    "33160": 100,
+    "34500": 100,
+    "34600": 100,
+    "37400": 50,
+    "37500": 50,
+    "32000": 100,
+    "32700": 100,
+    "32950": 50,
+    "33200": 100,
+    "34700": 100,
+    "35100": 100,
+    "35700": 100,
+    "35900": 50,
+    "37301": 50,
+    "31200": 50,
+    "33100": 50,
+    "33165": 100,
+    "34800": 100,
+    "35600": 50,
+    "37000": 50,
+    "37601": 100
+  },
+  "notes": [
+    "Concentration Financial Computing: listed course units sum to 250 but the page claims 650 available.",
+    "Concentration Machine Learning and AI: index page says 300 units needed / 600 available, the concentration page says 300 / 650. Using the concentration page.",
+    "Concentration Rates and Credit: index page says 300 units needed / 400 available, the concentration page says 300 / 300. Using the concentration page.",
+    "Concentration Trading: index page says 300 units needed / 300 available, the concentration page says 300 / 350. Using the concentration page.",
+    "Sitemap also serves course pages for FINM 31000, 33180, 33420, 37602, but none of them is linked from the current Core / Computing / Electives / concentration listings. Treated as retired and NOT included in the 29.",
+    "FINM 32000 title differs: listing 'Options: Numerical Methods' vs course page 'Numerical Methods'",
+    "FINM 32700: course page states concentration 'Financial Computing for Finance' but the course is listed on the Financial Computing concentration page.",
+    "FINM 33165 in-person quarter is recorded verbatim on the course page as 'Autumn Quarter' (normalised to 'Autumn').",
+    "FINM 34000 in-person quarter is recorded verbatim on the course page as 'September Launch (This course takes place in the month of September, prior to the start of Autumn Quarter for the in-person cohort.)' (normalised to 'September Launch').",
+    "FINM 34700 title differs: listing 'Multivariate Statistical Analysis' vs course page 'Multivariate Statistical Analysis: Applications and Techniques'",
+    "FINM 37301 title differs: listing 'Foreign Exchange: Markets, Products, and Pricing' vs course page 'Foreign Exchange: Markets, Products & Pricing'",
+    "FINM 37601 title differs: listing 'Mathematical Market Microstructure: An Optimization Approach' vs course page 'Mathematical Market Microstructure: An Optimized Approach'"
+  ],
+  "fetched": "2026-09-26"
+}

@@ -1,0 +1,13 @@
+Modern Applied Optimization
+
+This course assumes no background in optimization. The focus will be on various classical and modern algorithms, with a view towards applications in economics, finance, machine learning, and statistics. In the first half of the course we will go over classical algorithms: univariate optimization and root finding (Newton, secant, regula falsi, Brent, etc), unconstrained optimization (steepest descent, Newton, quasi-Newton, Gauss–Newton, Barzilai–Borwein, SGD, etc), constrained optimization (slack variables, penalty, barrier, augmented Lagrangian, primal–dual, etc). Applications to machine learning and statistics will include robust regression, ridge regression, polynomial regression, logistic regression, support vector machines with hinge/sigmoid loss, etc. Applications in economics will include optimization of Cobb–Douglas and CES production functions, Marshallian demand, shadow prices, flow prediction, etc. Applications in finance will include Markowitz portfolio optimization, Sharpe ratio optimization, Value-at-Risk optimization, portfolio optimization with Kelly criterion, portfolio variance optimization, etc. The mainstay of this course is continuous optimization but we will give a flavor of various specialized topics including combinatorial, convex, discrete, dynamic, integer, multiobjective, nonsmooth, and stochastic optimization problems.
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Lek-Heng Lim
+
+Concentration: Machine Learning and AI
+
+Syllabus

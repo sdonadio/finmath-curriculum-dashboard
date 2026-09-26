@@ -1,0 +1,19 @@
+Numerical Methods
+
+Implementing the theory introduced in FINM 33000 (Options) , this course takes a numerical/computational approach to the pricing and hedging of financial derivatives. Topics include: Trees as diffusion approximations; Finite difference methods for PDE solution; Monte Carlo methods for simulation; Fourier transform methods for pricing.
+
+In-Person Program
+
+Quarter: Spring
+
+Instructor: Roger Lee
+
+Concentration: Options and Derivatives
+
+Syllabus
+
+Online Program
+
+Quarter: Spring 2026
+
+Instructor: Roger Lee

@@ -1,0 +1,35 @@
+Foundations of Applied Machine Learning
+
+This course introduces core machine learning methods, with applications drawn from financial datasets such as cross-sectional equity returns. The emphasis is on understanding how standard machine learning tools behave in high-dimensional, noisy, and time-dependent settings. Rather than surveying many algorithms, the course focuses on a small set of foundational methods: linear models, dimensionality reduction, tree-based methods, and neural networks. A central theme is the challenge of extracting signal from noisy data, and the importance of careful model validation.
+
+By the end of the course, students will:
+
+- Understand the principles of supervised learning and model evaluation
+
+- Recognize and mitigate overfitting in high-dimensional settings
+
+- Apply regularized linear models to panel data
+
+- Use dimensionality reduction techniques (e.g., PCA) to uncover structure
+
+- Implement and interpret modern tree-based methods (e.g., gradient boosting)
+
+- Understand neural networks as tools for learning representations
+
+- Evaluate models using appropriate validation techniques for time-dependent data
+
+In-Person Program
+
+Quarter: Autumn
+
+Instructor: Matt Olson
+
+Concentration: Machine Learning and AI
+
+Online Program
+
+Quarter: Summer 2026
+
+Instructor: Matt Olson
+
+Syllabus
