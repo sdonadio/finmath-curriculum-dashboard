@@ -3,6 +3,16 @@
 Live site: https://sdonadio.github.io/finmath-curriculum-dashboard/   repo: github.com/sdonadio/finmath-curriculum-dashboard
 Local preview: `cd ~/PycharmProjects/FinMathCurriculumArena && python3 -m http.server 8765 --bind 127.0.0.1` → http://127.0.0.1:8765/
 
+## CHECKPOINT 2026-09-26 18:40 ET — all agents stopped by request (account switch)
+15 course files live (see `ls courses/`). 14 missing: 31200 32000 32400 32600 32700 32950 33100 33160 33200 33500 34500 35600 35700 35900.
+Partial work saved:
+- tools/gen_finm_33500.py  (26 KB, Opus tier A, week 1 snippets only) → finish with Opus per notes/TIER_A_BRIEF.md
+- tools/gen_finm_34500.py  (10 KB stub) → rewrite
+- notes/scratch_snippets/  → tested snippet .py files the stopped agents left (c1wXcY = 32000 Numerical Methods,
+  others for 35700 / 31200 / 35600 / 32400); reuse them as SNIPPETS when relaunching those courses.
+Relaunch plan (≤5 Sonnet + Opus for 33500/32700): 34500 · 32000+35700 · 31200+35600 · 32400 · 33500 (Opus); then
+32700 (Opus) · 32600+32950 · 33100+33160 · 33200+35900.
+
 ## State of courses/ (29 total)
 Done + live: see `ls courses/`. Missing = every code in data/courses.csv without a file.
 Tier A (Sebastien's own, Opus, brief notes/TIER_A_BRIEF.md): 33500 (in progress), 32700 (not started).

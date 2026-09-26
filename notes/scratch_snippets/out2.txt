@@ -1,0 +1,185 @@
+==================== w1c1 ====================
+E[S20 | S8=-4] = -3.960   (n=21826)
+E[S20 | S8=+0] = -0.004   (n=54761)
+E[S20 | S8=+4] = +3.996   (n=21850)
+
+check: E[S20|S8=v] should equal v -- max abs gap over these three: 0.04
+==================== w1c2 ====================
+fair (p=0.5): martingale                E[S11-S10] = -0.0034
+biased up (p=0.55): submartingale       E[S11-S10] = +0.1011
+biased down (p=0.45): supermartingale   E[S11-S10] = -0.1008
+==================== w1c3 ====================
+gambler's ruin: start at 0, absorbing at +6 and -4
+martingale (optional stopping) formula  P(hit +6 first) = a/(a+b) = 0.4000
+simulated P(hit +6 first) over 300000 trials      = 0.3997
+still undecided after 5000 steps: 0
+==================== w1c4 ====================
+martingale-transform (double-after-loss) strategy over 15 fair coin flips, 100000 paths
+mean final wealth:  -0.6330   (fair game: should be ~0)
+std of final wealth: 230.514
+max final wealth observed: 15.0   min: -32767.0
+==================== w2c1 ====================
+n=    10 steps  Var(B_1) = 0.9950   (target: 1.0000)
+n=   100 steps  Var(B_1) = 1.0043   (target: 1.0000)
+n=  1000 steps  Var(B_1) = 1.0005   (target: 1.0000)
+n= 10000 steps  Var(B_1) = 0.9904   (target: 1.0000)
+==================== w2c2 ====================
+corr(increment over [0.10,0.30], increment over [0.30,0.60]) = -0.0070
+corr(increment over [0.30,0.60], increment over [0.60,0.90]) = -0.0023
+both should be ~0: disjoint Brownian increments are independent
+==================== w2c3 ====================
+n=    50 partition points  mean quadratic variation = 1.9946  (target: T=2.0)  std across paths = 0.3994
+n=   500 partition points  mean quadratic variation = 2.0001  (target: T=2.0)  std across paths = 0.1243
+n=  5000 partition points  mean quadratic variation = 2.0001  (target: T=2.0)  std across paths = 0.0398
+n= 50000 partition points  mean quadratic variation = 2.0004  (target: T=2.0)  std across paths = 0.0126
+==================== w2c4 ====================
+h=0.1       typical |B(t+h)-B(t)|/h =      2.531   (1/sqrt(h) =      3.162)
+h=0.01      typical |B(t+h)-B(t)|/h =      8.002   (1/sqrt(h) =     10.000)
+h=0.001     typical |B(t+h)-B(t)|/h =     24.949   (1/sqrt(h) =     31.623)
+h=0.0001    typical |B(t+h)-B(t)|/h =     79.385   (1/sqrt(h) =    100.000)
+==================== w3c1 ====================
+Ito integral of B dB via left-endpoint Riemann sums, n=4000 steps
+mean of left-endpoint sum:            +0.00257
+mean of (B_T^2 - T)/2 [Ito's answer]: +0.00249
+mean |sum - (B_T^2-T)/2| (should -> 0 as n grows): 0.00897
+==================== w3c2 ====================
+Ito integral of f(t)=t against dB_t, T=1.0
+simulated Var(I) = 0.33328
+Ito isometry E[I^2] = integral f^2 dt = 0.33308  (closed form T^3/3 = 0.33333)
+simulated E[I] = -0.00208  (should be ~0)
+==================== w3c3 ====================
+running Ito integral I_t = int_0^t B dB, checked at s=t/2 (index 250) and t (index 500)
+E[I_s] = +0.00175   E[I_t] = +0.00327   (martingale: both should be ~0)
+  bucket by I_s (n= 6000): E[I_s|bucket]=-0.126  E[I_t|bucket]=-0.126
+  bucket by I_s (n= 6000): E[I_s|bucket]=-0.103  E[I_t|bucket]=-0.100
+  bucket by I_s (n= 6000): E[I_s|bucket]=-0.065  E[I_t|bucket]=-0.063
+  bucket by I_s (n= 6000): E[I_s|bucket]=+0.014  E[I_t|bucket]=+0.011
+  bucket by I_s (n= 6000): E[I_s|bucket]=+0.288  E[I_t|bucket]=+0.294
+==================== w3c4 ====================
+three Riemann-sum conventions for the SAME stochastic integral of B dB (n=4000 steps):
+  left-endpoint  mean = +0.0012   (Ito's answer:        (B_T^2-T)/2 = +0.0013)
+  right-endpoint mean = +1.0014   (should be near        (B_T^2+T)/2 = +1.0013)
+  midpoint       mean = +0.5013   (Stratonovich's answer: B_T^2/2      = +0.5013)
+==================== w4c1 ====================
+Ito's formula check on f(x)=x^2: B_T^2  vs  2*int_0^T B dB + T
+mean B_T^2                    = 0.99325
+mean [2*int B dB + T]         = 0.99330
+mean |difference| across paths = 0.01786
+==================== w4c2 ====================
+GBM at T=1.0: Euler-discretized SDE vs Ito's-formula closed form, 60000 paths, n=2000 steps
+  Euler   mean= 108.224  std= 27.527
+  closed  mean= 108.224  std= 27.529
+  theory E[S_T] = S0*exp(mu*T) = 108.329
+==================== w4c3 ====================
+two correlated Brownian motions, target correlation rho=0.4, T=1.0
+E[B1_T * B2_T]                 = +0.4035   (product-rule prediction rho*T = +0.4000)
+quadratic covariation <B1,B2>_T = +0.3998   (should match rho*T)
+==================== w4c4 ====================
+exponential martingale M_t = exp(B_t - t/2), T=1.0: E[M_T] = 1.0010  (should be 1.0000)
+  E[M_t] at t = [0.25, 0.5, 0.75, 1.0] -> [0.9944, 0.9972, 0.999, 1.001]
+exponential martingale M_t = exp(B_t - t/2), T=3.0: E[M_T] = 0.9951  (should be 1.0000)
+  E[M_t] at t = [0.75, 1.5, 2.25, 3.0] -> [1.0015, 1.0165, 1.0031, 0.9951]
+==================== w5c1 ====================
+OU process dX = theta(mu-X)dt + sigma dB, theta=2.0, mu=0.5, sigma=0.6, T=5.0
+simulated E[X_T]  = 0.5001   (target mu = 0.5)
+simulated Var[X_T] = 0.0902   (target sigma^2/(2 theta) = 0.0900)
+==================== w5c2 ====================
+sensitivity to a 1e-06 perturbation in X_0, same Brownian path, over T=2.0:
+  Lipschitz coefficients (dX=0.3 X dt + 0.4 X dB):        mean |gap at T| = 0.000002
+  non-Lipschitz coefficients (dX = X^(1/3) dB near 0):    mean |gap at T| = 0.034682
+  ratio (non-Lipschitz / Lipschitz): 19043.27x
+==================== w5c3 ====================
+n= 8000 Euler steps (dt=0.00013)  mean |S_euler-S_exact| =  0.0600   err/sqrt(dt) =  5.3697
+n=  800 Euler steps (dt=0.00125)  mean |S_euler-S_exact| =  0.1872   err/sqrt(dt) =  5.2954
+n=  200 Euler steps (dt=0.00500)  mean |S_euler-S_exact| =  0.3778   err/sqrt(dt) =  5.3431
+n=   50 Euler steps (dt=0.02000)  mean |S_euler-S_exact| =  0.7517   err/sqrt(dt) =  5.3152
+==================== w5c4 ====================
+two correlated GBMs simulated jointly via Cholesky mixing, target log-return correlation rho=-0.5
+realized correlation of log(S1_T/S0_1), log(S2_T/S0_2) over 30000 paths: -0.4998
+==================== w6c1 ====================
+Feynman-Kac / heat equation: u(0,x0)=E[f(x0+B_T)] for f(x)=x^2, x0=1.0, T=0.5
+Monte Carlo estimate: 1.5026
+closed form x0^2 + T: 1.5000
+==================== w6c2 ====================
+Feynman-Kac Monte Carlo price of a European call: 9.5411  (s.e. 0.0262)
+Black-Scholes closed form:                        9.5563
+gap in standard errors: 0.58
+==================== w6c3 ====================
+Feynman-Kac with a discount (killing) rate: u_tau = 0.5 sigma^2 u_xx - r u, u(x,0)=x^2
+evaluated at x0=1.0, tau=T=1.0, sigma=0.4, r=0.05 (n_steps=40, dx=0.100)
+finite-difference PDE grid value:  1.1036
+Monte Carlo e^(-rT) E[(x0+sigma B_T)^2]: 1.1037
+closed form e^(-rT)(x0^2 + sigma^2 T):    1.1034
+==================== w6c4 ====================
+n_paths=    1000  MC price=11.5275  s.e.=0.5567   |MC-BS|=0.1791  (0.32 s.e.)
+n_paths=   10000  MC price=11.0360  s.e.=0.1754   |MC-BS|=0.3125  (1.78 s.e.)
+n_paths=  100000  MC price=11.3474  s.e.=0.0567   |MC-BS|=0.0011  (0.02 s.e.)
+n_paths= 1000000  MC price=11.3553  s.e.=0.0179   |MC-BS|=0.0068  (0.38 s.e.)
+Black-Scholes closed form: 11.3485
+==================== w7c1 ====================
+E^Q[1(B_T>0.5)] two ways, Q defined by Radon-Nikodym derivative exp(theta B_T - theta^2 T/2), theta=0.6
+direct simulation under Q (B_T ~ N(theta*T, T)):     0.5403
+reweighting a P-simulation by the RN derivative:      0.5375
+==================== w7c2 ====================
+Girsanov: is W_t = B_t - theta*t a Q-Brownian motion? checking W_T under the RN-reweighted measure
+E^Q[W_T]   = -0.0018   (should be ~0)
+Var^Q[W_T] = 1.0022    (should be ~T=1.0)
+==================== w7c3 ====================
+theta= 0.5  E[exp(.5 theta^2 T)]=        1.13   weight std/mean=    0.53   effective sample size= 155940.3 / 200000
+theta= 2.0  E[exp(.5 theta^2 T)]=        7.39   weight std/mean=   11.87   effective sample size=   1408.5 / 200000
+theta= 5.0  E[exp(.5 theta^2 T)]=   268337.29   weight std/mean=  103.11   effective sample size=     18.8 / 200000
+theta= 8.0  E[exp(.5 theta^2 T)]=78962960182680.69   weight std/mean=  358.64   effective sample size=      1.6 / 200000
+==================== w7c4 ====================
+real-world drift mu=0.12, risk-free r=0.03, market price of risk theta=(mu-r)/sigma=0.3600
+E^P[discounted S_T]            = 109.4311   (not a martingale under P: != S0=100.0)
+E^Q[discounted S_T] (reweighted) = 99.9970   (should be ~S0=100.0: risk-neutral martingale)
+==================== w8c1 ====================
+ERROR: TypeError only length-1 arrays can be converted to Python scalars
+==================== w8c2 ====================
+n=    1000  price=12.3298  s.e.=0.56917
+n=   10000  price=10.9597  s.e.=0.17036  (ratio to previous s.e.: 3.34, sqrt(10)=3.16)
+n=  100000  price=11.4011  s.e.=0.05661  (ratio to previous s.e.: 3.01, sqrt(10)=3.16)
+n= 1000000  price=11.3546  s.e.=0.01793  (ratio to previous s.e.: 3.16, sqrt(10)=3.16)
+Black-Scholes closed form: 11.3485
+==================== w8c3 ====================
+ERROR: TypeError only length-1 arrays can be converted to Python scalars
+==================== w8c4 ====================
+Black-Scholes closed-form delta: 0.5968
+bump-and-reprice (finite difference) estimator: mean=0.5984  std=0.6135
+pathwise-derivative estimator:                   mean=0.5984  std=0.6155
+pathwise/bump std ratio: 1.003
+==================== w9c1 ====================
+Poisson process, rate lambda=3.0, horizon T=4.0: N_T built from i.i.d. Exp(lambda) gaps
+simulated mean N_T = 11.9762   (target lambda*T = 12.0)
+simulated var N_T  = 12.0161   (target lambda*T = 12.0)
+==================== w9c2 ====================
+compound Poisson process Y_T = sum of N_T jumps, lambda=5.0, T=2.0, jump~N(0.02,0.05^2)
+simulated mean Y_T = 0.20013   (theory lambda*T*E[J] = 0.20000)
+simulated var  Y_T = 0.02891   (theory lambda*T*E[J^2] = 0.02900)
+==================== w9c3 ====================
+Merton jump-diffusion, compensated so drift = r - lambda*E[e^J-1], r=0.03, lambda=1.0
+simulated E[S_T]        = 103.090
+theory S0*exp(r*T)      = 103.045   (should match: compensation removes the jump bias)
+==================== w9c4 ====================
+quadratic variation of a jump-diffusion, decomposed into its two sources, T=1.0
+continuous part  mean = 0.09001   (theory sigma^2*T = 0.09000)
+jump part        mean = 0.02552   (theory lambda*T*E[J^2] = 0.02560)
+total  [X,X]_T   mean = 0.11553
+==================== w10c1 ====================
+u=0.5  empirical char. fn. = +0.9918-0.0300j   Levy-Khintchine = +0.9919-0.0297j
+u=1.0  empirical char. fn. = +0.9678-0.0584j   Levy-Khintchine = +0.9679-0.0578j
+u=2.0  empirical char. fn. = +0.8778-0.1046j   Levy-Khintchine = +0.8780-0.1037j
+==================== w10c2 ====================
+P(|log-return| > 0.3):  pure diffusion = 0.13362   jump-diffusion = 0.23271   ratio = 1.74x
+P(|log-return| > 0.5):  pure diffusion = 0.01245   jump-diffusion = 0.05695   ratio = 4.57x
+P(|log-return| > 0.8):  pure diffusion = 0.00005   jump-diffusion = 0.00502   ratio = 92.93x
+==================== w10c3 ====================
+same option (K=100.0, T=1.0) priced three ways:
+  Black-Scholes at the diffusion-only vol 0.2:            9.4134  (wrong model for jump risk)
+  Merton jump-diffusion Monte Carlo:                        11.3974  (right model)
+  Black-Scholes at variance-matched vol 0.2550:    11.5401  (matches variance, not shape)
+==================== w10c4 ====================
+closing the loop: quadratic variation is the single object this course kept coming back to.
+pure Brownian motion [B,B]_T (scaled by sigma^2): mean = 0.06249  (theory sigma^2*T = 0.06250)
+same diffusion plus jumps  [X,X]_T:               mean = 0.08674
+jump contribution alone (difference):             mean = 0.02425  (theory lambda*T*E[J^2] = 0.02430)

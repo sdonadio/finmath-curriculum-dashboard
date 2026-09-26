@@ -1,0 +1,769 @@
+===== w1c1.py =====
+cursor pull : 5 calls, 23 rows, distinct 23
+offset pull, insert at top : 24 rows, duplicated [9], missing []
+offset pull, delete at top : 22 rows, duplicated [], missing [10]
+a cursor is a fact about the data; an offset is a fact about a result set that moved
+----- exit 0 -----
+
+===== w1c2.py =====
+policy        result     calls  total wait s  delays
+fixed         ok             5         2.000  [0.5, 0.5, 0.5, 0.5]
+exponential   ok             5         7.500  [0.5, 1.0, 2.0, 4.0]
+jittered      ok             5         3.855  [0.016, 0.869, 1.862, 1.107]
+exponential   10 clients -> 1 distinct retry schedule(s)
+jittered      10 clients -> 10 distinct retry schedule(s)
+closed form for the pure exponential wait: base*(2^n - 1) = 7.5
+----- exit 0 -----
+
+===== w1c3.py =====
+rows fetched across the two overlapping windows : 12
+dedup by hash of the whole row                  : 12 rows kept
+dedup by the stable natural key (trade_id)      : 9 rows kept
+trade 4 after key dedup: px=100.1  (the correction survived)
+fields that must never enter the dedup key      : ['retrieved_at']
+arrivals per trade_id                           : {1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 1, 8: 1, 9: 1}
+----- exit 0 -----
+
+===== w1c4.py =====
+landing zone manifest (immutable, write-once):
+  part-000.json   67B  sha256=f63d25d67d05
+  part-001.json   65B  sha256=f56bb892305f
+  part-002.json   61B  sha256=b24dbebb4035
+re-read bytes identical to what landed          : True
+
+schema-on-read, same bytes, two parser versions:
+  v1: 0/3 share counts parsed, total 0
+  v2: 3/3 share counts parsed, total 1,793,750
+
+fixing the reader required zero re-extraction; that is the whole point
+----- exit 0 -----
+
+===== w2c1.py =====
+query A  sum(px) over 5000 rows
+  row-oriented values touched   :   60000
+  column-oriented values touched:    5000
+  ratio                         :    12.0x
+  same answer                   : True
+
+query B  fetch row 1234 in full
+  row-oriented values touched   :      12  (1 contiguous read)
+  column-oriented values touched:      12  (12 separate reads)
+
+orientation is not better or worse; it decides which query is cheap
+----- exit 0 -----
+
+===== w2c2.py =====
+the CSV as written:
+  permno,date,ret,vol,delisted
+  010145,2026-06-30,0.0134,9,False
+  093436,2026-06-30,,100,False
+  014593,2026-06-30,-0.0072,1000,True
+
+what comes back, and what type it is:
+  permno    '093436'       str
+  date      '2026-06-30'   str
+  ret       ''             str
+  vol       '100'          str
+  delisted  'False'        str
+
+four concrete breakages:
+  1 int(permno)            -> 10145  (the leading zero is gone forever)
+  2 sorted as text         -> ['100', '1000', '9']
+    sorted as numbers      -> [9, 100, 1000]
+  3 ret for permno 093436  -> ''  is it NULL, or zero, or 'not reported'?
+  4 bool('False')          -> True  every row now reads as delisted
+
+with an explicit schema at the boundary: delisted flags = [False, False, True], mean ret over non-null = 0.0031
+----- exit 0 -----
+
+===== w2c3.py =====
+200,000 rows x 6 columns
+format                         bytes  bytes/row   vs CSV
+csv                        8,739,960      43.70     1.0x
+parquet, uncompressed      2,737,194      13.69     3.2x
+parquet, snappy            2,275,383      11.38     3.8x
+parquet, zstd              2,009,544      10.05     4.3x
+
+zstd parquet lands in the 4-8x smaller bucket (ratio 4.3x)
+
+column projection: reading only px+qty touches 28.9% of the stored bytes; a CSV reader must parse 100%
+----- exit 0 -----
+
+===== w2c4.py =====
+sorted    row groups  12  groups that can hold ts in [45000,46000]:   1  rows scanned  10,000  rows kept 1,001  wasted-read factor   10.0x
+shuffled  row groups  12  groups that can hold ts in [45000,46000]:  12  rows scanned 120,000  rows kept 1,001  wasted-read factor  119.9x
+
+parquet statistics are min/max per row group; they only prune when the
+data is CLUSTERED on the column you filter. Sorting on ingest is the whole trick.
+----- exit 0 -----
+
+===== w3c1.py =====
+           NAIVE latest-value join        CORRECT as-of join
+trade_date period_end announce   B/M  |  period_end announce   B/M     error
+------------------------------------------------------------------------------
+2026-08-15  2026-09-30  01-20  0.2153 |  2026-06-30  07-29  0.2500  -0.0347
+2026-11-15  2026-09-30  01-20  0.2268 |  2026-09-30  10-28  0.2732  -0.0463
+2027-02-15  2026-09-30  01-20  0.2354 |  2026-09-30  01-20  0.2354  +0.0000
+
+what the naive join actually did:
+  2026-08-15: used a number first published 2027-01-20  (13.9% signal error)
+  2026-11-15: used a number first published 2027-01-20  (17.0% signal error)
+  2027-02-15: agrees
+
+two of the three rows are pure lookahead, and the leak is largest
+exactly where the restatement was largest -- i.e. where the news was.
+----- exit 0 -----
+
+===== w3c2.py =====
+  trade_us    px |  as-of (backward)        | nearest (peeks forward)
+----------------------------------------------------------------------------
+      1400 100.02 | q@1000   100.00/100.02 BUY  | q@1500   100.01/100.03 SELL   <-- used a quote from the FUTURE
+      2400 100.04 | q@2400   100.02/100.04 BUY  | q@2400   100.02/100.04 BUY 
+      3050 100.03 | q@2400   100.02/100.04 MID  | q@3100   100.05/100.07 SELL   <-- used a quote from the FUTURE
+      3899 100.07 | q@3100   100.05/100.07 BUY  | q@3900   100.04/100.06 BUY    <-- used a quote from the FUTURE
+      4800 100.08 | q@3900   100.04/100.06 BUY  | q@5000   100.06/100.08 BUY    <-- used a quote from the FUTURE
+
+sign flips caused by the nearest-quote join: 2 of 5 trades
+a trade 1 microsecond before a quote update is classified by that update,
+which is the one quote the trader provably could not have seen.
+
+edge case, a trade before the first quote: None
+an as-of join must return NULL there, not the first quote it can find.
+----- exit 0 -----
+
+===== w3c3.py =====
+name   reported  revised  surp_rep  surp_rev rank_rep rank_rev sign flip
+N00        1.20     1.20     0.091     0.091        1        4          
+N01        0.85     0.55    -0.150    -0.450       10        9          
+N02        2.10     2.15     0.077     0.103        2        3          
+N03        0.45     1.05    -0.100     1.100        8        1       YES
+N04        1.75     1.75    -0.028    -0.028        5        7          
+N05        0.95     0.40    -0.095    -0.619        7       10          
+N06        1.40     1.40     0.077     0.077        3        5          
+N07        0.30     0.70    -0.143     1.000        9        2       YES
+N08        2.60     2.50     0.040     0.000        4        6       YES
+N09        1.05     1.05    -0.045    -0.045        6        8          
+
+names revised at all                : 6 of 10
+surprise sign flips                 : 3
+rank correlation of the two signals : 0.188
+long-short spread, as reported      : 0.213
+long-short spread, as revised       : 1.106
+top-3 basket, reported ['N00', 'N02', 'N06']  revised ['N02', 'N03', 'N07']
+overlap 1/3 -- a backtest on revised data traded a portfolio
+that the as-reported tape would never have produced.
+----- exit 0 -----
+
+===== w3c4.py =====
+world as known on 2026-08-01: AAA/06-30=1080
+world as known on 2026-11-15: AAA/06-30=1080  AAA/09-30=1120  BBB/09-30=2210
+world as known on 2027-02-01: AAA/06-30=1080  AAA/09-30=930  BBB/09-30=2210
+
+the same physical table answers a reporting question too --
+'what do we NOW believe about Q3', which is a different query:
+   [('AAA', '2026-09-30', 930.0), ('BBB', '2026-09-30', 2210.0)]
+
+and the classic bug: filtering on period_end but not on knowledge time
+   rows returned: 4 (one fact appears twice; one is not yet public)
+     AAA 2026-06-30 known_from 2026-07-29 be 1080
+     AAA 2026-09-30 known_from 2026-10-28 be 1120
+     AAA 2026-09-30 known_from 2027-01-20 be 930   <-- from the future
+     BBB 2026-09-30 known_from 2026-11-04 be 2210
+
+an as-of predicate is two inequalities, not one. Drop either and you get
+duplicated rows or a lookahead, and both look like a plausible result.
+----- exit 0 -----
+
+===== w4c1.py =====
+tasks 12  edges 12  acyclic True
+execution order:
+   1. pull_compustat
+   2. pull_crsp
+   3. pull_taq
+   4. clean_funda
+   5. clean_crsp
+   6. quotes
+   7. trades
+   8. funda_join
+   9. tca
+  10. signal
+  11. backtest
+  12. report
+edges violated by this order: 0
+
+with report -> clean_crsp added: acyclic False, 7/12 tasks schedulable
+tasks trapped in the cycle: ['backtest', 'clean_crsp', 'funda_join', 'report', 'signal']
+Kahn's algorithm rejects by construction: a cyclic graph has no node
+left at indegree zero, so the queue empties before the order is complete.
+----- exit 0 -----
+
+===== w4c2.py =====
+inferred edges (6):
+  clean_crsp -> join
+  clean_crsp -> vol_est
+  clean_funda -> join
+  join -> signal
+  join -> signal_v2
+  signal_v2 -> backtest
+
+undeclared inputs   : [('signal', 'cur/sector_map.csv')]
+double-written paths: [('cur/signal.parquet', 'signal', 'signal_v2')]
+dead intermediates  : ['cur/vol.parquet']
+
+why each of these is a production incident, not a style nit:
+  undeclared input    -> the scheduler cannot know when to re-run you;
+                         the file is whatever the last human left there
+  double-written path -> the result depends on task ORDER, and the order
+                         is only constrained up to a topological sort
+  dead intermediate   -> you are paying to compute something nobody reads
+----- exit 0 -----
+
+===== w4c3.py =====
+12 tasks fingerprinted; report = 034638cba5
+
+new TAQ day lands (pull_taq input changes)
+  changed node(s)      : ['pull_taq']
+  descendants of it    : ['backtest', 'quotes', 'report', 'tca', 'trades']
+  fingerprints changed : 6/12  ['backtest', 'pull_taq', 'quotes', 'report', 'tca', 'trades']
+  tasks safely SKIPPED : 6
+
+signal code edited (one line in signal.py)
+  changed node(s)      : ['signal']
+  descendants of it    : ['backtest', 'report']
+  fingerprints changed : 3/12  ['backtest', 'report', 'signal']
+  tasks safely SKIPPED : 9
+
+report cosmetics only (report.py edited)
+  changed node(s)      : ['report']
+  descendants of it    : []
+  fingerprints changed : 1/12  ['report']
+  tasks safely SKIPPED : 11
+
+the dirty set is always the changed node plus its descendants, never more.
+An orchestrator that re-runs the whole graph is not wrong, just expensive;
+one that re-runs less than this is wrong, and quietly.
+----- exit 0 -----
+
+===== w4c4.py =====
+level  tasks                                        width   work
+1      pull_compustat, pull_crsp, pull_taq              3     53
+2      clean_crsp, clean_funda, quotes, trades          4     32
+3      funda_join, tca                                  2     13
+4      signal                                           1      2
+5      backtest                                         1      6
+6      report                                           1      1
+
+total work 107 units, graph depth 6 levels, max width 4 tasks
+serial schedule                  : 107 units
+unbounded workers, level by level: 73 units (speed-up 1.47x)
+critical path                    : 71 units, ending at 'report' (theoretical best speed-up 1.51x)
+
+pull_taq alone is 37% of the work and sits on the
+critical path: no amount of parallelism helps until that task gets faster.
+----- exit 0 -----
+
+===== w5c1.py =====
+once   : 7 rows  positions {'AAA': 500, 'BBB': -200}  notional 9265.5
+x3 retry: 7 rows  positions {'AAA': 500, 'BBB': -200}  notional 9265.5
+IDENTICAL STATE: True  <- this is what idempotent means
+
+out-of-order replay, plain upsert : fill 4 px 10.05, notional 9264.5  identical False
+out-of-order replay, rev-guarded  : fill 4 px 10.06, notional 9265.5  identical True
+
+no key, same replays: 17 rows, positions {'AAA': 800, 'BBB': -250}
+AAA overstated by 300 shares -- phantom inventory
+a risk system will hedge and a trader will not have.
+----- exit 0 -----
+
+===== w5c2.py =====
+true totals by event day: {1: 30, 2: 70, 3: 100, 4: 60, 5: 75}   (335 units in all)
+
+lateness  reported totals                          dropped  lost  worst day
+       0  {1: 30, 2: 45, 3: 50, 4: 60, 5: 75}            2    75       50%
+       1  {1: 30, 2: 45, 3: 50, 4: 60, 5: 75}            2    75       50%
+       2  {1: 30, 2: 70, 3: 50, 4: 60, 5: 75}            1    50       50%
+       3  {1: 30, 2: 70, 3: 100, 4: 60, 5: 75}           0     0        0%
+
+window k  reported totals                            exact  lost
+       1  {1: 30, 2: 45, 3: 50, 4: 60, 5: 75}        False    75
+       2  {1: 30, 2: 45, 3: 50, 4: 60, 5: 75}        False    75
+       4  {1: 30, 2: 70, 3: 100, 4: 60, 5: 75}        True     0
+
+allowed lateness is a business decision about how wrong you are willing
+to be, stated in days. A one-day watermark lost 75 of 335 units and
+understated day 3 by half; the report itself never said so.
+----- exit 0 -----
+
+===== w5c3.py =====
+ledger rows written (with the replay) : 8
+snapshot rows                         : 4
+
+read path                             AAA    BBB   correct
+append-only, SUM(qty) raw            -140   -300   False
+append-only, dedup on read            180   -150   True
+upsert snapshot                       180   -150   True
+ground truth                          180   -150
+
+append-only keeps the amendment history: you can still answer 'what did
+we think on Tuesday'. Query:
+  fill 4 revision 1 -> qty -100
+  fill 4 revision 2 -> qty -120
+  fill 4 revision 1 -> qty -100
+  fill 4 revision 2 -> qty -120
+the snapshot cannot answer that at all -- it overwrote revision 1.
+Append-only costs storage and a window function; it buys you an audit trail.
+----- exit 0 -----
+
+===== w5c4.py =====
+before backfill: 30 rows, total 1680
+
+ day    orig (n,sum)    blind append   partition swap
+   1         (3, 33)         (3, 33)          (3, 33)
+   2         (3, 63)         (3, 63)          (3, 63)
+   3         (3, 93)         (3, 93)          (3, 93)
+   4        (3, 123)        (7, 289)         (4, 166)  <- backfilled
+   5        (3, 153)        (7, 359)         (4, 206)  <- backfilled
+   6        (3, 183)        (7, 429)         (4, 246)  <- backfilled
+   7        (3, 213)        (7, 499)         (4, 286)  <- backfilled
+   8        (3, 243)        (7, 569)         (4, 326)  <- backfilled
+   9        (3, 273)        (3, 273)         (3, 273)
+  10        (3, 303)        (3, 303)         (3, 303)
+
+blind append   : 50 rows, total 2910  (days 4-8 double-counted)
+partition swap : 35 rows, total 1995
+run the partition swap twice more: identical = True
+
+the unit of an idempotent backfill is a PARTITION, replaced whole.
+Appending into a partition is how a backfill silently doubles a P&L series.
+----- exit 0 -----
+
+===== w6c1.py =====
+batch of 5 rows, 5 columns under contract
+column   violation                                 rows  examples
+date     length 9, want 10                            1  [2]
+permno   null in NOT NULL column                      1  [3]
+prc      null in NOT NULL column                      1  [4]
+prc      outside [0.0001, 1000000.0]                  1  [2]
+ret      outside [-0.95, 5.0]                         1  [2]
+shrout   outside [1, 50000000000.0]                   1  [4]
+
+rows with at least one violation : 3/5 [2, 3, 4]
+rows fit to pass downstream      : 2
+
+note row 2: ret = -1.40 is not merely unusual, it is IMPOSSIBLE for a
+simple return -- you cannot lose 140% of a long equity position. A range
+check catches a sign or units bug that no type check ever will.
+----- exit 0 -----
+
+===== w6c2.py =====
+reference columns: ['exdate', 'impl_vol', 'open_interest', 'secid', 'strike']
+new batch columns: ['exdate', 'implied_volatility', 'open_interest', 'secid', 'strike']
+
+kind            column                            detail
+--------------------------------------------------------------------------------------------
+DROPPED         impl_vol                          present in reference (float), absent now
+ADDED           implied_volatility                new column, type float
+NEWLY NULLABLE  open_interest                     reference batch had no nulls; this batch does
+TYPE CHANGED    strike                            float -> str
+LIKELY RENAME   impl_vol -> implied_volatility    same type float, one vanished as the other appeared
+
+5 drift findings. What each one silently breaks:
+  the rename          -> a downstream .get('impl_vol') returns None for every row
+  strike as a string  -> a sort or a moneyness ratio is computed lexicographically
+  the 1000x units     -> strike 220 became 220000: every moneyness is off by 1000x
+  newly nullable OI   -> a liquidity filter on open_interest drops 2 of 3 rows
+A schema check is cheap. Every one of those four is a silent wrong answer.
+----- exit 0 -----
+
+===== w6c3.py =====
+uniqueness   : 6 distinct keys for 7 rows; duplicated [(14593, '2026-06-30')]
+referential  : 2 ids not in the master: [55555, 66666] (33% of the union)
+null rate    : 28.6% this batch vs 5% baseline, z = +2.86  no alert
+               the SAME 5.7x jump on a 4000-row batch: z = +68.4  ALERT
+               a distributional check on 7 rows has no power at all; batch
+               size, not the threshold, is what decides whether it can fire
+
+the multiple-testing arithmetic of a data-quality suite:
+ checks k   alpha   P(>=1 false alarm)  clean days per alarm
+        5    0.01                4.9%                  20.4
+       20    0.01               18.2%                   5.5
+      100    0.01               63.4%                   1.6
+      400    0.01               98.2%                   1.0
+
+With 400 checks at a 1% per-check false-positive rate you get an alert on
+98% of perfectly good days. A suite nobody believes is worse than no suite:
+size the thresholds so the aggregate false-alarm rate is what you can staff.
+----- exit 0 -----
+
+===== w6c4.py =====
+errors='coerce'  -> [99.25, 100.0, nan, 101.5, nan, nan, nan, 97.0, 102.25, 100.75]
+  parsed 6/10 rows; 4 became NaN with no message printed anywhere
+  mean of what survived : 100.1250
+  mean if you had known : 100.1250  (identical -- NaN is
+                          skipped by default, so the loss is invisible twice)
+
+errors='raise'   -> ValueError: Unable to parse string "SUPPRESSED" at position 2
+
+strict_parse: 4/10 unparseable (40%); gate says FAIL
+  row  2  'SUPPRESSED'   a sentinel, not a number
+  row  4  '98.75*'       a footnote marker glued to a value
+  row  5  '1,002.00'     a separator AND a convention: per $1,000 face, not per 100
+  row  6  '(0.50)'       accounting notation for a negative
+
+after handling each case ON PURPOSE: parsed 9/10, mean 189.0000
+the two means differ by 88.8750 (47.0%), all of it from one row -- and note
+that the strict parser did not FIX the 1,002.00 convention, it SURFACED it.
+Deciding what that row means is a human's job; the parser's job is to stop.
+----- exit 0 -----
+
+===== w7c1.py =====
+requests issued            : 17
+distinct (sym, day, window): 10
+uncached function calls    : 17
+memoised function calls    : 10
+cache hits 7, misses 10, hit rate 41.2%
+work avoided               : 41.2% of the calls
+ANSWERS IDENTICAL          : True
+max abs difference         : 0.0e+00
+
+memoisation is only sound for a PURE function of its arguments.
+  impure(1) first call 1, second call 1, underlying invocations 1
+  the second call returned a stale answer that happened to be right;
+  with a mutable default, a clock, or a file read in there, it would not be.
+----- exit 0 -----
+
+===== w7c2.py =====
+call site                                   key                   result  state
+report.py: winsorised_mean(r, 0.01, 0.99)   b456b2a7d526bdb1   -0.000564  MISS
+risk.py:   (hi_q=0.99, lo_q=0.01)           b456b2a7d526bdb1   -0.000564  HIT
+tca.py:    same data, different object      b456b2a7d526bdb1   -0.000564  HIT
+report.py: (0.05, 0.95) -- new params       db622031279e1a89   -0.000560  MISS
+after a bug fix: code_version wm-2          571b4293dd689448   -0.000564  MISS
+
+cache entries 3, hits 2, misses 3, real computations 3
+three different call sites, one key: True
+different params  -> different key : True
+different code    -> different key : True
+
+keying on the call site would have given five keys and five computations;
+keying on the file name would have given ONE key and two wrong answers.
+----- exit 0 -----
+
+===== w7c3.py =====
+truth with the original prices : 125000.0
+named cache    125000.00 MISS      content cache  125000.00 MISS key 89416a8a4cb3
+
+after the BBB price correction, truth = 129400.0
+named cache    125000.00 HIT   <- STALE, wrong by 4400.00 (3.4%)
+content cache  129400.00 MISS key 07c462fcbd31  <- key moved because the input moved
+
+underlying computations performed: 5
+named-cache answer equals truth   : False
+content-cache answer equals truth : True
+
+repeat query: 129400.0 HIT, extra computations 0, matches uncached answer True
+
+the two hard cache problems are naming and invalidation. Content addressing
+dissolves both: the name IS the content, so a stale entry is unreachable.
+----- exit 0 -----
+
+===== w7c4.py =====
+ capacity  keys   hits  misses  hit rate  work saved  answers correct
+        1   200    261    3739     6.5%       6.5%             True
+        5   200   1055    2945    26.4%      26.4%             True
+       20   200   2233    1767    55.8%      55.8%             True
+       50   200   2940    1060    73.5%      73.5%             True
+      200   200   3805     195    95.1%      95.1%             True
+
+the top 20 keys are 68% of all requests and the top 50 are 81%;
+that skew, not the cache size, is what makes caching worth doing here.
+
+capacity 0 : hit rate 0%, answers correct True
+capacity inf, one stale entry: hit rate 100%, wrong answers 16/4000 (0.4%)
+
+Measure them separately. Hit rate is a cost question you may trade away;
+correctness is not, and a high hit rate is exactly how a stale entry hides.
+----- exit 0 -----
+
+===== w8c1.py =====
+10 typed columns, 50 bytes per row
+10,000 rows really allocated: 500,000 bytes = 50 B/row  (predicted 50)
+
+           rows    raw GB  x3 working set   fits in 16GB x 40%?
+      1,000,000      0.05            0.14    yes
+     10,000,000      0.47            1.40    yes
+    100,000,000      4.66           13.97    NO
+  1,000,000,000     46.57          139.70    NO
+ 10,000,000,000    465.66         1396.98    NO
+
+the same table as 'everything is a string' CSV, ~44 B/row and a python
+object per field, is roughly 10x the in-memory footprint of the typed form.
+  10,000 rows as python objects: 5,700,000 bytes (array + ~49B per small str)
+
+one day of a liquid future at 40,000,000 messages: 1.9 GB
+one year of trading days (252)              : 0.5 TB
+the subset you usually need (2 columns, 1 hour): 0.09 GB
+
+That last line is the whole of week 8: the question is never 'how big is
+the dataset', it is 'how big is the part of it this query has to read'.
+----- exit 0 -----
+
+===== w8c2.py =====
+dataset: 200,000 rows, 100 partition files (20 dates x 5 symbols)
+
+query                                       files  rows scanned  rows kept   waste
+everything                                    100       200,000    200,000    1.0x
+date = 2026-09-07                               5        10,000     10,000    1.0x
+sym = CLX6                                     20        40,000     40,000    1.0x
+date = 2026-09-07 AND sym = CLX6                1         2,000      2,000    1.0x
+px > 103  (NOT a partition column)            100       200,000        285  701.8x
+same query on the UNpartitioned file            1       200,000      2,000  100.0x
+
+partitioning is not compression; it is a way of making the FILE PATH carry
+a predicate, so a filter on it eliminates whole files without opening them.
+Filter on a non-partition column and you are back to reading everything --
+which is why the partition key must be the column your queries actually use.
+----- exit 0 -----
+
+===== w8c3.py =====
+pos 40 rows, prc 64 rows
+rows per (sym, dt) in prc: max 3, mean 1.60  -> expected output rows = sum_k a_k*b_k
+
+join                                rows out      notional  vs correct
+naive equi-join                           64       638,400       1.60x
+join to one row per key                   40       400,000       1.00x
+
+cross join pos x prc : 2,560 rows (40 x 64)
+        m         n    cross rows     at 50 B/row
+    1,000     1,000         1e+06          0.0 GB
+   10,000    10,000         1e+08          4.7 GB
+  100,000   100,000         1e+10        465.7 GB
+1,000,000 1,000,000         1e+12     46,566.1 GB
+
+A cross join is the one query whose output you can size exactly before
+running it, and the one people run by accident. Count rows first.
+----- exit 0 -----
+
+===== w8c4.py =====
+200,000 rows, 400 distinct keys, 16 partitions
+hash partitioning by key : min 2,161  mean 12,500  max 111,819  SKEW 8.95x
+a level finishes when its SLOWEST partition finishes, so the wall-clock
+cost is set by 111,819 rows, not by 12,500.
+
+ partitions   max part      mean    skew
+          4    122,150    50,000   2.44x
+         16    111,819    12,500   8.95x
+         64    110,603     3,125  35.39x
+        256    109,760       781 140.49x
+       1024    109,760       195 561.97x
+floor: key S000 alone is 109,599 rows (55%); no hash of the key
+can put it on two workers, so skew >= 0.55 * P no matter what P is.
+
+salting the two hottest keys 8 ways: max 28,244  SKEW 2.26x  (from 8.95x)
+The cost is a second aggregation pass to re-combine the salted groups.
+Same DAG, same idempotency rules, same quality gates -- one more failure mode.
+----- exit 0 -----
+
+===== w9c1.py =====
+join          rows    notional
+INNER            6      27,287
+LEFT             7      30,687
+the INNER join silently dropped 1 row (11.1% of notional)
+
+the row that vanished, found by asking for it:
+  DDD  notional 3,400  -- no security-master row
+
+aggregate by sector, with the unmapped flow made VISIBLE:
+sector         trades    notional   share
+tech                4      19,041   62.0%
+energy              2       8,246   26.9%
+<unmapped>          1       3,400   11.1%
+
+and the check that belongs in the pipeline, not in your head:
+  trades 7, matched 6, unmapped symbols 1  -> match rate 85.7%
+Assert on the match rate. An inner join is a filter wearing a join's clothes.
+----- exit 0 -----
+
+===== w9c2.py =====
+sym      ts       px  qty  sd    cum  ret_bps  gap      ma3 rank
+AAA    1000 100.0664  200   B    200            10 100.0664    4
+AAA    1010 100.0633  400   S   -200     -0.3   10 100.0649    2
+AAA    1020 100.0169  200   B      0     -4.6   10 100.0489    4
+AAA    1030 100.0014  500   S   -500     -1.5   10 100.0272    1
+AAA    1040 100.0113  300   B   -200     +1.0   10 100.0099    3
+AAA    1050 100.0426  200   S   -400     +3.1      100.0184    4
+BBB    1000  49.9614  500   B    500            10  49.9614    1
+BBB    1010  49.8838  300   S    200    -15.5   10  49.9226    4
+BBB    1020  49.8947  200   B    400     +2.2   10  49.9133    5
+BBB    1030  49.9349  200   S    200     +8.1   10  49.9045    5
+BBB    1040  49.9266  500   B    700     -1.7   10  49.9187    1
+BBB    1050  49.9136  400   S    300     -2.6       49.9250    3
+CCC    1000  19.9036  100   B    100            10  19.9036    5
+CCC    1010  19.8293  400   S   -300    -37.3   10  19.8665    3
+CCC    1020  19.8068  100   B   -200    -11.3   10  19.8466    5
+CCC    1030  19.7875  400   S   -600     -9.7   10  19.8079    3
+CCC    1040  19.7281  500   B   -100    -30.0   10  19.7741    1
+CCC    1050  19.7118  500   S   -600     -8.3       19.7425    1
+
+the same three questions without window functions would be three
+self-joins or a pandas round trip. Note what PARTITION BY buys you:
+  rows with a NULL lag (one per symbol, not one in total): [('AAA', 1), ('BBB', 1), ('CCC', 1)]
+  drop PARTITION BY and only 1 row has a NULL lag: every symbol's
+  first print now takes its 'previous price' from a DIFFERENT symbol,
+  which is a return of thousands of basis points out of thin air.
+----- exit 0 -----
+
+===== w9c3.py =====
+no index:
+    SCAN m
+    SEARCH t USING AUTOMATIC COVERING INDEX (sym=?)
+    result 6,762 rows; nested-loop comparisons if scanned: 20,000 x 2,000 = 40,000,000
+
+with an index on master(sym):
+    SCAN t
+    BLOOM FILTER ON m (sym=?)
+    SEARCH m USING INDEX ix_master_sym (sym=?)
+    result 6,762 rows (identical: True); B-tree probes: 20,000 x ceil(log2 2,000) = 220,000
+    work ratio: 182x fewer comparisons
+
+with a covering index on master(sector, sym):
+    SCAN t
+    SEARCH m USING COVERING INDEX ix_master_sector_sym (sector=? AND sym=?)
+    result 6,762 rows
+
+note the first plan: with no index available sqlite BUILT one on the fly
+(AUTOMATIC COVERING INDEX) -- it paid the build cost inside the query,
+every time you run it, instead of once at schema time.
+
+read the plan, not the clock. SCAN means every row; SEARCH ... USING INDEX
+means a B-tree probe per outer row. The asymptotics are n*m versus n*log m,
+and that gap is why an unindexed research join dies as the panel grows.
+----- exit 0 -----
+
+===== w9c4.py =====
+join        rows   (dt, ticker, secid, permno, px, iv)
+naive          5
+            ('2026-03-31', 'OLD', 108105, 10145, 210.0, 0.28)
+            ('2026-03-31', 'OLD', 108105, 77777, 12.0, 0.28)
+            ('2026-09-30', 'NEW', 108105, 10145, 224.0, 0.31)
+            ('2026-09-30', 'OLD', 999999, 10145, 224.0, 0.55)
+            ('2026-09-30', 'OLD', 999999, 77777, 14.0, 0.55)
+correct        3
+            ('2026-03-31', 'OLD', 108105, 10145, 210.0, 0.28)
+            ('2026-09-30', 'NEW', 108105, 10145, 224.0, 0.31)
+            ('2026-09-30', 'OLD', 999999, 77777, 14.0, 0.55)
+
+(dt, secid, permno) triples the naive join invented : [('2026-03-31', 108105, 77777), ('2026-09-30', 999999, 10145)]
+triples it missed                                 : none
+rows out: naive 5 vs correct 3 -- a fan-out from a non-unique key
+
+the rule: join on the most stable identifier you have, and if the mapping
+itself changes over time, the mapping table needs a validity window and the
+join needs a BETWEEN. A ticker is a display label, not a primary key.
+----- exit 0 -----
+
+===== w10c1.py =====
+PR 412  add TRACE loader
+  weighted score 20/21   verdict: APPROVE with nits
+    nits      cost_stated
+
+PR 418  'small fix' to the signal
+  weighted score 12/21   verdict: REQUEST CHANGES
+    BLOCKING  inputs_pinned          Are input dataset versions / digests pinned in the change?
+    BLOCKING  output_diff_explained  Is the diff of the OUTPUT explained by the diff of the INPUT?
+    nits      tests_added, cost_stated
+
+PR 421  speed up the funda join
+  weighted score 12/21   verdict: REQUEST CHANGES
+    BLOCKING  reruns_clean           Does it run twice from a clean state and give the same output?
+    nits      schema_declared, idempotent_write, lineage_emitted
+
+the four blocking items are the ones a reviewer cannot verify later:
+  reruns_clean          -- otherwise the result is an anecdote
+  output_diff_explained -- an unexplained output change IS the bug report
+  no_lookahead          -- invisible in the diff, fatal in the backtest
+  inputs_pinned         -- without it, 'it worked yesterday' is unfalsifiable
+----- exit 0 -----
+
+===== w10c2.py =====
+the number on the desk's report is out/pnl@v3. Where did it come from?
+
+out/pnl@v3       code bt.py@ddeeff         params {'tc_bps': 5}
+  └─ out/signal@v3    code signal.py@aabbcc     params {'zwin': 60}
+    └─ cur/panel@v7     code join.py@778899       params {'asof': True, 'lag_days': 0}
+      └─ cur/crsp@v4      code clean.py@d4e5f6      params {'winsor': 0.01}
+        └─ raw/crsp@v1      code fetch.py@a1b2c3      params {'vendor_asof': '2026-09-26'}
+      └─ cur/funda@v2     code clean.py@d4e5f6      params {'units': 'thousands'}
+        └─ raw/funda@v1     code fetch.py@a1b2c3      params {'vendor_asof': '2026-09-26'}
+
+fingerprint of out/pnl@v3 : 5c83baa55fde
+
+if raw/funda@v1 turns out to be wrong, these must be rebuilt and
+these reports must be recalled: ['cur/funda@v2', 'cur/panel@v7', 'out/signal@v3', 'out/pnl@v3']
+
+if cur/crsp@v4 turns out to be wrong, these must be rebuilt and
+these reports must be recalled: ['cur/panel@v7', 'out/signal@v3', 'out/pnl@v3']
+
+changing signal's zwin from 60 to 120 moves 2/7 fingerprints: ['out/signal@v3', 'out/pnl@v3']
+Lineage is what turns 'the number changed' into a one-line answer.
+----- exit 0 -----
+
+===== w10c3.py =====
+manifest:
+{
+  "code": {
+    "clean.py": "952bd1d943bd00bd",
+    "fetch.py": "f9e3bf9c7fdf63d0",
+    "signal.py": "c410234a30416b59"
+  },
+  "data": {
+    "crsp.csv": "0034bbc8dd58e0e2",
+    "funda.csv": "bca3d0abfbd0b8e8"
+  },
+  "env": {
+    "numpy": "2.2.6",
+    "platform": "Darwin",
+    "python": "3.13.5"
+  },
+  "params": {
+    "asof": true,
+    "tc_bps": 5,
+    "winsor": 0.01,
+    "zwin": 60
+  }
+}
+
+manifest hash, run 1 : 1337727cb89e29b1
+manifest hash, run 2 : 1337727cb89e29b1  identical True
+
+now perturb exactly one thing at a time:
+  one parameter (zwin 60 -> 120)     -> bc94100e25209812  changed True
+  one line of code (signal.py)       -> e231b867c0376df7  changed True
+  one input byte (crsp.csv)          -> fa8ad18de972b51e  changed True
+
+One command rebuilds; one hash says whether the rebuild is the same run.
+A result reported without this hash cannot be checked by anyone, including
+you in six months, which is the person who will actually need to.
+----- exit 0 -----
+
+===== w10c4.py =====
+wk4  execution order: ingest -> schema -> asof -> quality -> load -> query -> manifest
+wk1  landed 4 rows, 4 after key dedup
+wk2  schema ok: ['sym', 'dt', 'px'] typed at the boundary
+wk3  as-of 2026-09-30: kept 2 vintages, excluded 1 not-yet-public row(s)
+wk6  quality gate passed on 4 joined rows
+wk5  upserted idempotently: 4 rows
+wk7  cache MISS on key 240d59ff9a08, computed once
+wk8  rows read 4, rows out 2 (fan-out 0.50x, no cross join)
+wk9  [('BBB', 8.366534, 1), ('AAA', 5.082353, 2)]
+wk10 manifest hash 2ac0109eb2a7
+
+rerun: output identical True, manifest identical True, real computations so far 1
+as-of moved to 2026-12-31 (the restatement is now public):
+  ranking [('BBB', 8.366534, 1), ('AAA', 4.423529, 2)]
+  manifest 2e82ebee0d49, differs from the 09-30 run: True
+
+Same code, same inputs, different as-of date -> a different, CORRECT answer,
+and a manifest hash that says exactly which of the two you are looking at.
+----- exit 0 -----
+
