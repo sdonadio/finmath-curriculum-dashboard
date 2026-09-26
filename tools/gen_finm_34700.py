@@ -2485,7 +2485,7 @@ WEEK10 = {
           "candidates give ample room to overfit even honestly. The gap between +0.230 and -0.188 is not a "
           "rounding difference; it is the entire difference between a result that will replicate and one "
           "that will not.</p>",
-          "\\mathbb E[\\hat R^2_{\\text{leaky}}] \;>\; \\mathbb E[\\hat R^2_{\\text{correct}}] \\quad \\text{whenever selection uses } y_{\\text{test}}",
+          "\\mathbb E[\\hat R^2_{\\text{leaky}}] \\;>\\; \\mathbb E[\\hat R^2_{\\text{correct}}] \\quad \\text{whenever selection uses } y_{\\text{test}}",
           "w10c3"),
         C("Closing the loop: a shrunk covariance estimate makes a better portfolio",
           "<p>This course opened with the sample covariance matrix as the basic object every multivariate "
@@ -2543,3 +2543,436 @@ WEEK10 = {
 }
 
 WEEKS = [WEEK1, WEEK2, WEEK3, WEEK4, WEEK5, WEEK6, WEEK7, WEEK8, WEEK9, WEEK10]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Course-level metadata
+# ─────────────────────────────────────────────────────────────────────────
+COURSE = {
+    "code": "FINM 34700",
+    "slug": "finm-34700",
+    "title": "Multivariate Statistical Analysis: Applications and Techniques",
+    "instructor": "Jingshu Wang",
+    "quarter": "Spring",
+    "units": 100,
+    "block": "electives",
+    "concentrations": ["machine-learning-ai"],
+    "source": {
+        "page_url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/machine-learning-and-ai/finm-34700/",
+        "syllabus_url": "https://uchicago.box.com/s/qklh5fxhdeqfxcqemxahypfd8pdsy6a8",
+        "fetched": "2026-09-26",
+        "note": "The only readable source for this course was the public course page: an official "
+                "description of about ninety words plus the instructor, the quarter and the units. The "
+                "syllabus PDF is a Box shared link restricted to a university login, so data/raw/syllabus/ "
+                "is empty for this course and no syllabus text exists in this corpus. Everything below the "
+                "description -- the ten-week arc, the concepts, the formulas, the code and its output, the "
+                "pitfalls, the questions, the interview set and the glossary -- is this dashboard's own "
+                "reconstruction of a standard graduate treatment of the topics the description names. None "
+                "of it comes from the instructor, none of it was reviewed by the instructor, and nothing "
+                "about grading, assignments, required readings, exam format or scheduling should be "
+                "inferred from it.",
+    },
+    "tier": "B",
+    "description": "An elective in the Machine Learning and AI concentration. It introduces statistical "
+                    "methods for analyzing, modeling, and interpreting multivariate and high-dimensional "
+                    "data, with an emphasis on dependence structure, dimensionality reduction, latent "
+                    "pattern discovery, and predictive modeling. The public description lists principal "
+                    "component analysis, factor models, canonical correlation analysis, clustering and "
+                    "mixture models, regularized regression (ridge and lasso), sparse methods, covariance "
+                    "estimation, and tree-based methods including random forests, taught with an emphasis "
+                    "on geometric intuition and computational implementation over classical distribution "
+                    "theory, and applied throughout to real data sets comparing linear and nonlinear "
+                    "approaches.",
+    "prerequisites": [
+        "Linear algebra you can compute with: eigenvalues and eigenvectors of a symmetric matrix, "
+        "quadratic forms, positive semi-definiteness, and matrix inversion. Every method in this course "
+        "is, underneath, an operation on the eigenstructure of a covariance matrix.",
+        "Probability and statistics through the multivariate normal distribution, moments, and basic "
+        "estimation: what a mean vector and covariance matrix estimate, and why an estimate has sampling "
+        "variability.",
+        "Ordinary least squares in matrix form. Ridge, lasso, PCA regression and factor models are all "
+        "variations on a linear model fit by minimising a penalised or transformed sum of squares.",
+        "Python with numpy at the level of solving a linear system, computing an eigendecomposition or a "
+        "Cholesky factor, and writing a simulation loop. pandas for basic data handling.",
+        "Comfort reading and writing code that manipulates matrices directly, since several weeks "
+        "implement a method (coordinate descent, a regression tree, k-means) from its update rule rather "
+        "than calling a single library function.",
+    ],
+    "textbooks": [
+        {
+            "title": "An Introduction to Statistical Learning",
+            "author": "Gareth James, Daniela Witten, Trevor Hastie, and Robert Tibshirani",
+            "note": "The standard reference for ridge, lasso, PCA, clustering and tree-based methods "
+                    "(weeks 2, 5, 6, 8 and 9) at the level of intuition and application this course "
+                    "targets, before the more technical treatment below.",
+        },
+        {
+            "title": "The Elements of Statistical Learning",
+            "author": "Trevor Hastie, Robert Tibshirani, and Jerome Friedman",
+            "note": "The technical companion: the derivations behind coordinate descent for lasso, "
+                    "the bias-variance decomposition of ridge and PCA regression, and the statistical "
+                    "theory of bagging and random forests.",
+        },
+        {
+            "title": "Applied Multivariate Statistical Analysis",
+            "author": "Richard A. Johnson and Dean W. Wichern",
+            "note": "A classical multivariate-statistics treatment of covariance structure, principal "
+                    "components, and canonical correlation analysis (weeks 1 to 4), with the distribution "
+                    "theory this course deliberately de-emphasises in favour of geometry and computation.",
+        },
+    ],
+    "skills_built": [
+        "pca",
+        "factor-models",
+        "canonical-correlation",
+        "covariance-estimation",
+        "ridge-regression",
+        "lasso",
+        "clustering",
+        "decision-trees",
+        "random-forests",
+    ],
+    "skills_assumed": [
+        "linear-algebra",
+        "linear-regression",
+        "numpy",
+        "python-pandas",
+        "conditional-expectation",
+    ],
+    "brushup": [
+        {
+            "topic": "Eigenvalues and eigenvectors of a symmetric matrix",
+            "why": "PCA is nothing but sorting the eigenvectors of a covariance matrix by eigenvalue. If "
+                   "'the eigenvector with the largest eigenvalue is the direction of maximum variance' "
+                   "is not already intuitive, week 2 will feel like a list of numpy calls rather than one "
+                   "idea applied four different ways.",
+            "resource": "Strang, Introduction to Linear Algebra, the chapters on symmetric matrices and "
+                        "the spectral theorem; then diagonalise a 3x3 covariance matrix by hand.",
+        },
+        {
+            "topic": "Positive semi-definiteness and quadratic forms",
+            "why": "Every covariance matrix is symmetric PSD, and w'Sigma w is the variance of w'X. "
+                   "Mahalanobis distance, ridge's penalty term, and the min-variance portfolio all use "
+                   "this identity in week 1 and again in week 10.",
+            "resource": "Any linear algebra text's chapter on definiteness; then verify that A'A is PSD "
+                        "for an arbitrary matrix A.",
+        },
+        {
+            "topic": "OLS in matrix form, including the normal equations",
+            "why": "Ridge (week 5), lasso (week 6) and principal component regression (weeks 2 and 10) "
+                   "are all OLS with either a penalty added to the normal equations or the design matrix "
+                   "replaced by a rotated, truncated version of itself.",
+            "resource": "Any econometrics text on the multiple regression model in matrix form; then "
+                        "derive the ridge normal equations (X'X + lambda*I) beta = X'y from the penalised "
+                        "objective.",
+        },
+        {
+            "topic": "The sample covariance matrix and the effect of n relative to p",
+            "why": "Weeks 1 and 7 both hinge on the fact that the sample covariance matrix's eigenvalues "
+                   "spread out as p approaches n, even under a simple true covariance -- the single fact "
+                   "that motivates shrinkage, PCA and regularisation throughout the course.",
+            "resource": "Any multivariate statistics text's chapter on the Wishart distribution and "
+                        "sample covariance properties; then simulate the eigenvalue spread at a few "
+                        "values of p/n.",
+        },
+        {
+            "topic": "numpy: eigendecomposition, Cholesky factors, and simulating correlated data",
+            "why": "Every snippet in this course starts by simulating data with a known covariance "
+                   "structure and then estimating that structure back. np.linalg.eigh, np.linalg.cholesky "
+                   "and broadcasting are used in nearly every week.",
+            "resource": "The numpy linalg documentation; then generate two thousand draws from a "
+                        "four-variable distribution with a specified correlation matrix in three lines.",
+        },
+        {
+            "topic": "Basic algorithmic thinking: loops, recursion, and greedy search",
+            "why": "Weeks 6, 8 and 9 implement coordinate descent, k-means, and recursive tree-growing "
+                   "from their update rules rather than calling a single library function -- you need to "
+                   "be comfortable writing and tracing a loop that updates a state until it stops changing.",
+            "resource": "Any introductory algorithms text's chapter on iterative and greedy methods; then "
+                        "implement gradient descent on a quadratic function from scratch.",
+        },
+    ],
+    "interview": [
+        {
+            "q": "Why is a covariance matrix always positive semi-definite, and what does it mean when a "
+                 "matrix that is supposed to be one comes back with a negative eigenvalue?",
+            "level": "screen",
+            "answer": "A covariance matrix's quadratic form w'Sigma w equals the variance of the linear "
+                      "combination w'X, which cannot be negative for any w, so every eigenvalue must be "
+                      "non-negative. A small negative eigenvalue in an estimated matrix usually means p is "
+                      "close to or exceeds n, or the matrix was built inconsistently, for example from "
+                      "pairwise-complete correlations that do not come from one common data matrix -- not "
+                      "routine floating-point noise, which is the wrong diagnosis to reach for first.",
+        },
+        {
+            "q": "Walk me through what PCA actually computes, without using the phrase 'dimensionality "
+                 "reduction'.",
+            "level": "screen",
+            "answer": "PCA eigendecomposes the covariance matrix. The eigenvector with the largest "
+                      "eigenvalue is the direction in variable space along which the data has the most "
+                      "variance; the eigenvalue itself is that variance. The next component is the "
+                      "eigenvector, orthogonal to the first, with the next-largest eigenvalue, and so on. "
+                      "There is no separate algorithm beyond np.linalg.eigh and a sort -- everything else, "
+                      "loadings, scores, variance explained, is reading off properties of that "
+                      "eigendecomposition.",
+        },
+        {
+            "q": "When would you reach for canonical correlation analysis instead of running PCA on each "
+                 "block of variables separately?",
+            "level": "screen",
+            "answer": "When the question is specifically how two blocks of variables co-move, not how "
+                      "either block varies internally. PCA on each block separately finds the directions "
+                      "of maximum variance within a block, which may have nothing to do with the other "
+                      "block. CCA whitens both blocks by their own inverse square-root covariance and then "
+                      "finds the pair of directions, one from each block, with maximal correlation -- it is "
+                      "the cross-block analogue of PCA's within-block analogue.",
+        },
+        {
+            "q": "A colleague standardises all two hundred candidate features and selects the twenty most "
+                 "correlated with the outcome before running five-fold cross-validation on those twenty. "
+                 "What is wrong?",
+            "level": "onsite",
+            "answer": "The feature-selection step used the entire data set, including the rows that will "
+                      "later serve as each fold's test set, so the reported cross-validated error is "
+                      "optimistically biased. In a simulation with a response that is pure noise, selecting "
+                      "the five most-correlated features using the full sample produced a mean "
+                      "out-of-sample R-squared of +0.23; doing the identical selection using only each "
+                      "fold's training rows produced the honest answer of about -0.19. The fix is to put "
+                      "feature selection inside the cross-validation loop, refitting it on each fold's "
+                      "training data alone.",
+        },
+        {
+            "q": "How would you decide, in practice, how many principal components to keep?",
+            "level": "onsite",
+            "answer": "Plot cumulative variance explained against the number of components and look for "
+                      "the elbow, the point where the curve goes from steep to nearly flat, since the "
+                      "eigenvalues always sum to total variance. I would cross-check that against "
+                      "reconstruction error, which is exactly the sum of the dropped eigenvalues, and "
+                      "against whether the retained loadings have an interpretable pattern, such as the "
+                      "level/slope/curvature structure that shows up whenever variables are ordered along "
+                      "an axis like maturity or moneyness. A component that explains variance but has no "
+                      "interpretable loading pattern is worth treating with suspicion.",
+        },
+        {
+            "q": "Explain what coordinate descent is doing when it fits a lasso, and why the update "
+                 "involves a soft-threshold rather than a plain least-squares step.",
+            "level": "onsite",
+            "answer": "Coordinate descent fixes every coefficient except one, solves for that one "
+                      "coefficient's optimal value holding the rest fixed, and cycles through coefficients "
+                      "until nothing changes. Because the L1 penalty is not differentiable at zero, the "
+                      "per-coordinate optimum is a soft-threshold of the ordinary least-squares update: it "
+                      "shrinks the coefficient toward zero by the penalty amount and sets it to exactly "
+                      "zero if the shrinkage would flip its sign. That thresholding step is the entire "
+                      "mechanism behind lasso's variable selection -- ridge's L2 penalty has a smooth "
+                      "derivative everywhere and never zeroes a coefficient exactly.",
+        },
+        {
+            "q": "Why does shrinking a sample covariance matrix improve a tangency portfolio's realised "
+                 "Sharpe ratio, when the shrinkage target has nothing to do with the true covariance?",
+            "level": "onsite",
+            "answer": "Tangency weights are proportional to the inverse covariance matrix applied to "
+                      "expected excess returns, and inversion divides by the smallest eigenvalues, which "
+                      "are the noisiest, most estimation-error-dominated directions in a data-starved "
+                      "sample. Shrinking toward a structured target such as a scaled identity improves the "
+                      "matrix's conditioning even though the target is not the truth, which stabilises the "
+                      "inverse. In a thirty-six-month, twenty-five-asset simulation this raised the "
+                      "out-of-sample Sharpe ratio from 0.033 to 0.052 while cutting gross leverage from "
+                      "2.6x to 1.5x, with the expected-return inputs held identical.",
+        },
+        {
+            "q": "Why can permutation importance badly understate the importance of a signal that is "
+                 "carried by two correlated features instead of one?",
+            "level": "onsite",
+            "answer": "Permutation importance measures the rise in error from shuffling one feature while "
+                      "leaving everything else, including a correlated substitute, intact. If two features "
+                      "carry the same signal, the model can lean on whichever one was not shuffled, so "
+                      "permuting either alone understates how much the pair jointly matters. In a small "
+                      "simulation a single informative feature registered an importance of 5.24; the "
+                      "identical signal split across two correlated duplicates registered only 0.98 and "
+                      "1.97 on the two copies, even though the combined predictive content was unchanged.",
+        },
+        {
+            "q": "A random forest and a bagging ensemble are trained on the same data, one dominant "
+                 "predictive feature and several weaker or noise features. Which one decorrelates the "
+                 "trees more, and why does that matter for the variance of the ensemble average?",
+            "level": "senior",
+            "answer": "The random forest, because restricting each split to a random subset of features "
+                      "prevents every tree from defaulting to the same dominant predictor, forcing "
+                      "different trees to rely on different features. The variance of an ensemble average "
+                      "is rho*sigma^2 + (1-rho)/B*sigma^2, where rho is the correlation between trees; as B "
+                      "grows large the second term vanishes but rho*sigma^2 remains a floor that plain "
+                      "bagging cannot remove by adding more trees. In a simulation, bagged trees correlated "
+                      "at 0.725 while random-forest-restricted trees correlated at 0.427, which is why "
+                      "random forests typically beat bagging by more than adding trees alone would explain.",
+        },
+        {
+            "q": "You are handed a covariance matrix estimated from 40 assets and 36 months of returns and "
+                 "asked to build a minimum-variance portfolio. What do you check before inverting it?",
+            "level": "senior",
+            "answer": "The condition number, because p at 40 against n at 36 is exactly the regime where "
+                      "sample-covariance eigenvalues spread out purely from estimation noise: the smallest "
+                      "eigenvalues get pushed toward zero and the largest get pushed up even under a "
+                      "genuinely simple true covariance. I would not invert the raw sample covariance in "
+                      "this regime; I would shrink it toward a structured target first, since shrinkage "
+                      "improves the behaviour of the inverse far more than it improves the matrix itself "
+                      "in any entrywise sense, and then check that the resulting minimum-variance weights "
+                      "are not dominated by a handful of extreme, unstable positions.",
+        },
+        {
+            "q": "The curse of dimensionality is often described loosely as 'high-dimensional data is "
+                 "sparse.' Make that precise, and explain why it undermines a nearest-neighbour method "
+                 "specifically.",
+            "level": "senior",
+            "answer": "Precisely: for points drawn with independent coordinates in a p-dimensional space, "
+                      "the ratio of the nearest neighbour's distance to the farthest neighbour's distance "
+                      "converges to 1 as p grows, with sample size fixed. In a simulation with 500 points "
+                      "the ratio was 0.023 at p equals 2 and 0.862 at p equals 500. A nearest-neighbour "
+                      "method's entire mechanism depends on some points being meaningfully closer than "
+                      "others; once every point is nearly equidistant from every other point, 'nearest' "
+                      "carries almost no information, which is the strongest argument for a dimension-"
+                      "reduction step, PCA, factor models or regularisation, before applying such a method.",
+        },
+        {
+            "q": "How would you fairly compare OLS, ridge, principal component regression, and lasso on "
+                 "the same data set, and what would make the comparison unfair?",
+            "level": "senior",
+            "answer": "Run all four inside the identical K-fold cross-validation loop, changing only which "
+                      "fitting function is called inside each fold and holding the fold assignments fixed "
+                      "across methods, so any difference in reported error reflects the methods rather than "
+                      "which observations happened to land in which fold. It would be unfair to tune each "
+                      "method's hyperparameter on a different split, to let any method see test-fold "
+                      "outcomes during a preprocessing or feature-selection step, or to declare a winner "
+                      "from a single train/test split when the ranking between close competitors can flip "
+                      "with a different split -- the ranking is also specific to how well each method's "
+                      "assumption, such as lasso's sparsity, matches the particular data's true structure.",
+        },
+    ],
+    "reappears_in": [
+        {
+            "code": "FINM 36700",
+            "how": "Portfolio and Risk Management consumes this course's estimation machinery directly: "
+                   "covariance shrinkage and conditioning feed its plug-in-optimiser and minimum-variance "
+                   "weeks, and PCA is the standard tool for reducing a large asset universe to a handful "
+                   "of factors before optimising.",
+        },
+        {
+            "code": "FINM 33150",
+            "how": "Quantitative Trading Strategies builds signals from factor exposures and regularised "
+                   "regressions much like weeks 3, 5 and 6 here, and its portfolio-construction step "
+                   "inherits the same covariance-conditioning concerns as week 7.",
+        },
+        {
+            "code": "FINM 33160",
+            "how": "Machine Learning for Finance applies ridge, lasso, and tree-based methods (weeks 5, 6 "
+                   "and 9 here) to return-forecasting problems, where this course's cross-validation and "
+                   "leakage discipline from week 10 is the difference between a result that replicates and "
+                   "one that does not.",
+        },
+        {
+            "code": "FINM 34600",
+            "how": "The Analysis of High Frequency Data estimates covariance matrices from noisy, "
+                   "asynchronously sampled returns, which is the same high-dimensional covariance-"
+                   "estimation problem week 7 introduces, under an additional microstructure-noise "
+                   "complication.",
+        },
+        {
+            "code": "FINM 33100",
+            "how": "Foundations of Applied Machine Learning covers the same regression-tree and clustering "
+                   "building blocks introduced in weeks 8 and 9 here, at an earlier point in the program "
+                   "and with less emphasis on the multivariate, covariance-driven framing.",
+        },
+    ],
+    "glossary": [
+        {"term": "Covariance matrix", "def": "A symmetric matrix collecting the variance of each variable "
+                                              "on its diagonal and the covariance of every pair off it; "
+                                              "always positive semi-definite when built consistently from "
+                                              "one common data matrix."},
+        {"term": "Mahalanobis distance", "def": "A distance that rescales by the inverse covariance "
+                                                  "matrix, so movement along a correlated data set's "
+                                                  "natural axis of variation counts for less than movement "
+                                                  "across it."},
+        {"term": "Principal component", "def": "An eigenvector of a covariance matrix, ordered by "
+                                                 "eigenvalue; the direction of maximal remaining variance "
+                                                 "orthogonal to every earlier component."},
+        {"term": "Variance explained", "def": "The fraction of total variance (the sum of all eigenvalues) "
+                                                "captured by a chosen number of top principal components."},
+        {"term": "Factor model", "def": "A model that decomposes each variable's variance into a component "
+                                          "shared with common factors and an idiosyncratic component "
+                                          "specific to that variable."},
+        {"term": "Canonical correlation analysis", "def": "A method that finds the pair of linear "
+                                                            "combinations, one from each of two blocks of "
+                                                            "variables, with maximal correlation, after "
+                                                            "whitening each block by its own covariance."},
+        {"term": "Ridge regression", "def": "Least squares with an added L2 penalty on the coefficient "
+                                              "vector, which shrinks coefficients and improves the "
+                                              "conditioning of the normal equations."},
+        {"term": "Lasso", "def": "Least squares with an added L1 penalty, fit by coordinate descent with a "
+                                   "soft-threshold update, which performs variable selection by shrinking "
+                                   "some coefficients to exactly zero."},
+        {"term": "Shrinkage estimator", "def": "An estimated covariance matrix blended toward a structured "
+                                                 "target (such as a scaled identity) at an intensity chosen "
+                                                 "to trade a small bias for a large reduction in variance."},
+        {"term": "Condition number", "def": "The ratio of a matrix's largest to smallest eigenvalue; large "
+                                              "values signal a matrix that amplifies estimation noise when "
+                                              "inverted."},
+        {"term": "Marchenko-Pastur law", "def": "The limiting distribution of sample-covariance eigenvalues "
+                                                  "under a true identity covariance, as p and n grow "
+                                                  "together at a fixed ratio; the theoretical explanation "
+                                                  "for eigenvalue spreading."},
+        {"term": "k-means", "def": "A clustering algorithm that alternates assigning each point to its "
+                                     "nearest cluster centre and recomputing each centre as the mean of its "
+                                     "assigned points, until assignments stop changing."},
+        {"term": "Gaussian mixture model", "def": "A clustering model that assigns each point a probability "
+                                                     "of belonging to each of several Gaussian components, "
+                                                     "fit by the EM algorithm, rather than a single hard "
+                                                     "cluster label."},
+        {"term": "Hierarchical clustering", "def": "A clustering method that builds a nested sequence of "
+                                                      "clusters by repeatedly merging (or splitting) groups "
+                                                      "according to a linkage rule, with no need to fix the "
+                                                      "number of clusters in advance."},
+        {"term": "CART", "def": "Classification and regression trees: a model built by recursively "
+                                  "partitioning feature space, at each step choosing the single split that "
+                                  "most reduces prediction error within each resulting region."},
+        {"term": "Bagging", "def": "Bootstrap aggregating: fitting many models on bootstrap resamples of "
+                                     "the training data and averaging their predictions to reduce variance."},
+        {"term": "Random forest", "def": "Bagged trees with an added restriction that only a random subset "
+                                           "of features is considered at each split, which decorrelates the "
+                                           "trees and unlocks more of bagging's variance reduction."},
+        {"term": "Permutation importance", "def": "A feature's importance measured as the rise in a fitted "
+                                                     "model's error when that feature's values are randomly "
+                                                     "shuffled; dilutes across correlated features that "
+                                                     "carry the same signal."},
+        {"term": "Curse of dimensionality", "def": "The tendency of distances between points to become "
+                                                      "nearly equal as the number of independent dimensions "
+                                                      "grows, undermining any method that relies on "
+                                                      "'nearby' being meaningful."},
+        {"term": "Data leakage", "def": "Any pipeline step that uses information from data that will later "
+                                          "be used for evaluation, such as selecting features by their "
+                                          "correlation with the outcome across the full sample before "
+                                          "splitting into train and test."},
+    ],
+    "weeks": WEEKS,
+}
+
+
+def main() -> None:
+    with open(OUT, "w") as f:
+        f.write(
+            "/* courses/finm-34700.js -- FINM 34700, Multivariate Statistical Analysis: Applications "
+            "and Techniques.\n"
+            "   Built from the public course page only. The syllabus is a Box shared link behind a\n"
+            "   university login and was not readable, so the ten-week arc, the explanations, the\n"
+            "   code, the questions, the interview set and the glossary are this dashboard's own\n"
+            "   reconstruction of a standard graduate treatment of the topics the public\n"
+            "   description names -- not the instructor's material, and not endorsed by anyone.\n"
+            "   Every code `output` is real stdout written by tools/run_snippets.py; do not edit\n"
+            "   those strings by hand. */\n"
+        )
+        f.write('window.COURSES = window.COURSES || {};\n')
+        f.write('window.COURSES["FINM 34700"] = ')
+        f.write(json.dumps(COURSE, indent=2))
+        f.write(';\n')
+    print(f"wrote {OUT}")
+
+
+if __name__ == "__main__":
+    main()

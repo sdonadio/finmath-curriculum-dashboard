@@ -160,6 +160,16 @@ window.SKILLS = {
       ]
     },
     {
+      "tag": "canonical-correlation",
+      "name": "Canonical correlation",
+      "category": "stats-ml",
+      "blurb": "Finding paired linear combinations of two blocks of variables that co-move",
+      "built_in": [
+        "FINM 34700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "carry-trade",
       "name": "Carry trade",
       "category": "trading",
@@ -181,6 +191,16 @@ window.SKILLS = {
       "built_in": [
         "FINM 33000",
         "FINM 37500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "clustering",
+      "name": "Clustering",
+      "category": "stats-ml",
+      "blurb": "Grouping observations without labels: k-means, hierarchical and model-based methods",
+      "built_in": [
+        "FINM 34700"
       ],
       "assumed_in": []
     },
@@ -216,6 +236,7 @@ window.SKILLS = {
         "FINM 33000",
         "FINM 33165",
         "FINM 34600",
+        "FINM 34700",
         "FINM 35100",
         "FINM 36700",
         "FINM 37400",
@@ -273,6 +294,7 @@ window.SKILLS = {
       "blurb": "Estimating and conditioning a covariance matrix when n is close to p",
       "built_in": [
         "FINM 34600",
+        "FINM 34700",
         "FINM 36700"
       ],
       "assumed_in": [
@@ -316,6 +338,16 @@ window.SKILLS = {
       "blurb": "Automated data-quality checks that fail loudly before a model sees the data",
       "built_in": [
         "FINM 32800"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "decision-trees",
+      "name": "Decision trees",
+      "category": "stats-ml",
+      "blurb": "Recursive partitioning of feature space into axis-aligned regions",
+      "built_in": [
+        "FINM 34700"
       ],
       "assumed_in": []
     },
@@ -388,6 +420,7 @@ window.SKILLS = {
       "category": "risk",
       "blurb": "Explaining returns through common factors; attribution and residual risk",
       "built_in": [
+        "FINM 34700",
         "FINM 36700",
         "FINM 37400"
       ],
@@ -561,6 +594,7 @@ window.SKILLS = {
       "category": "stats-ml",
       "blurb": "L1-penalised regression that performs variable selection by zeroing coefficients",
       "built_in": [
+        "FINM 34700",
         "FINM 34800"
       ],
       "assumed_in": []
@@ -586,6 +620,7 @@ window.SKILLS = {
         "FINM 33150",
         "FINM 33165",
         "FINM 34000",
+        "FINM 34700",
         "FINM 34800",
         "FINM 36700",
         "FINM 37000",
@@ -606,6 +641,7 @@ window.SKILLS = {
         "FINM 33165",
         "FINM 34000",
         "FINM 34600",
+        "FINM 34700",
         "FINM 34800",
         "FINM 35100",
         "FINM 36700",
@@ -807,6 +843,7 @@ window.SKILLS = {
         "FINM 33165",
         "FINM 34000",
         "FINM 34600",
+        "FINM 34700",
         "FINM 34800",
         "FINM 35100",
         "FINM 36700",
@@ -876,6 +913,7 @@ window.SKILLS = {
       "category": "stats-ml",
       "blurb": "Principal component analysis: orthogonal directions of maximal variance",
       "built_in": [
+        "FINM 34700",
         "FINM 37000",
         "FINM 37400"
       ],
@@ -940,10 +978,21 @@ window.SKILLS = {
       "assumed_in": [
         "FINM 32800",
         "FINM 33150",
+        "FINM 34700",
         "FINM 36700",
         "FINM 37000",
         "FINM 37601"
       ]
+    },
+    {
+      "tag": "random-forests",
+      "name": "Random forests",
+      "category": "stats-ml",
+      "blurb": "Bagged, decorrelated trees; out-of-bag error and variable importance",
+      "built_in": [
+        "FINM 34700"
+      ],
+      "assumed_in": []
     },
     {
       "tag": "random-walk",
@@ -994,7 +1043,8 @@ window.SKILLS = {
       "category": "stats-ml",
       "blurb": "L2-penalised regression; shrinkage and conditioning of the normal equations",
       "built_in": [
-        "FINM 33165"
+        "FINM 33165",
+        "FINM 34700"
       ],
       "assumed_in": []
     },
@@ -1483,6 +1533,48 @@ window.SKILLS = {
         "martingales",
         "linear-regression",
         "numpy",
+        "conditional-expectation"
+      ]
+    },
+    {
+      "code": "FINM 34700",
+      "slug": "finm-34700",
+      "title": "Multivariate Statistical Analysis: Applications and Techniques",
+      "instructor": "Jingshu Wang",
+      "quarter": "Spring",
+      "units": 100,
+      "block": "electives",
+      "tier": "B",
+      "concentrations": [
+        "machine-learning-ai"
+      ],
+      "weeks": 10,
+      "concepts": 40,
+      "mcqs": 40,
+      "widgets": 10,
+      "prerequisites": [
+        "Linear algebra you can compute with: eigenvalues and eigenvectors of a symmetric matrix, quadratic forms, positive semi-definiteness, and matrix inversion. Every method in this course is, underneath, an operation on the eigenstructure of a covariance matrix.",
+        "Probability and statistics through the multivariate normal distribution, moments, and basic estimation: what a mean vector and covariance matrix estimate, and why an estimate has sampling variability.",
+        "Ordinary least squares in matrix form. Ridge, lasso, PCA regression and factor models are all variations on a linear model fit by minimising a penalised or transformed sum of squares.",
+        "Python with numpy at the level of solving a linear system, computing an eigendecomposition or a Cholesky factor, and writing a simulation loop. pandas for basic data handling.",
+        "Comfort reading and writing code that manipulates matrices directly, since several weeks implement a method (coordinate descent, a regression tree, k-means) from its update rule rather than calling a single library function."
+      ],
+      "skills_built": [
+        "pca",
+        "factor-models",
+        "canonical-correlation",
+        "covariance-estimation",
+        "ridge-regression",
+        "lasso",
+        "clustering",
+        "decision-trees",
+        "random-forests"
+      ],
+      "skills_assumed": [
+        "linear-algebra",
+        "linear-regression",
+        "numpy",
+        "python-pandas",
         "conditional-expectation"
       ]
     },
