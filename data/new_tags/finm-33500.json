@@ -1,0 +1,32 @@
+[
+  {
+    "tag": "asyncio-concurrency",
+    "category": "programming",
+    "name": "Event-loop concurrency in Python: coroutines, tasks and gather, bounded queues and backpressure, cancellation, reconnect with backoff, and keeping blocking work off the loop"
+  },
+  {
+    "tag": "object-oriented-design",
+    "category": "programming",
+    "name": "Modelling a domain as classes behind abstract interfaces: abstract base classes, encapsulation, composition over inheritance, the Strategy and Adapter patterns, and UML class diagrams"
+  },
+  {
+    "tag": "algorithmic-complexity",
+    "category": "programming",
+    "name": "Big-O reasoning and container choice for hot paths: heaps, hash maps, deques and sorted structures, lazy deletion, O(1) rolling statistics and tail latency"
+  },
+  {
+    "tag": "walk-forward-validation",
+    "category": "stats-ml",
+    "name": "Time-ordered model validation: expanding or rolling folds, embargoes against overlapping labels, leakage diagnosis and shuffled-label controls"
+  },
+  {
+    "tag": "model-ops",
+    "category": "stats-ml",
+    "name": "Moving a model into production: versioned artifacts with a model card, serving inside a latency budget, drift monitoring, kill switches and retraining"
+  },
+  {
+    "tag": "pre-trade-risk-controls",
+    "category": "risk",
+    "name": "Controls in front of every order: price collars, notional and position limits, message quotas, loss limits and a latched kill switch"
+  }
+]

@@ -38,6 +38,8 @@ window.SKILLS_SEED = {
     { tag: "linear-algebra",                    name: "Vector spaces, rank, projections, and the matrix algebra quant work runs on" },
   ],
   "stats-ml": [
+    { tag: "model-ops", name: "Moving a model into production: versioned artifacts with a model card, serving inside a latency budget, drift monitoring, kill switches and retraining" },
+    { tag: "walk-forward-validation", name: "Time-ordered model validation: expanding or rolling folds, embargoes against overlapping labels, leakage diagnosis and shuffled-label controls" },
     { tag: "bayesian-inference", name: "Prior, likelihood and posterior as a working tool: odds-form updating, conjugate models and sequential learning" },
     { tag: "jump-detection", name: "Separating jumps from diffusive moves: truncation, bipower ratios and extreme-value jump tests" },
     { tag: "realised-volatility", name: "Realised measures of volatility: realised variance, bipower and kernel estimators, and their limit theory" },
@@ -97,6 +99,9 @@ window.SKILLS_SEED = {
     { tag: "cds-pricing",                       name: "Credit default swap valuation from hazard rates and recovery assumptions" },
   ],
   "programming": [
+    { tag: "algorithmic-complexity", name: "Big-O reasoning and container choice for hot paths: heaps, hash maps, deques and sorted structures, lazy deletion, O(1) rolling statistics and tail latency" },
+    { tag: "object-oriented-design", name: "Modelling a domain as classes behind abstract interfaces: abstract base classes, encapsulation, composition over inheritance, the Strategy and Adapter patterns, and UML class diagrams" },
+    { tag: "asyncio-concurrency", name: "Event-loop concurrency in Python: coroutines, tasks and gather, bounded queues and backpressure, cancellation, reconnect with backoff, and keeping blocking work off the loop" },
     { tag: "numpy",                             name: "Array programming, broadcasting and vectorised numerics" },
     { tag: "python-pandas",                     name: "DataFrames: joins, groupby, resampling and time-series indexing" },
     { tag: "scikit-learn",                      name: "Estimator/transformer API, pipelines and model selection" },
@@ -142,6 +147,7 @@ window.SKILLS_SEED = {
     { tag: "data-lineage",                           name: "Tracing an output number back to the inputs, code and environment that produced it" },
   ],
   "risk": [
+    { tag: "pre-trade-risk-controls", name: "Controls in front of every order: price collars, notional and position limits, message quotas, loss limits and a latched kill switch" },
     { tag: "robust-optimization", name: "Worst-case optimisation over an uncertainty set, robust counterparts, and the equivalence with regularisation" },
     { tag: "mean-variance",                     name: "Trading expected return against variance; the two-moment framework" },
     { tag: "efficient-frontier",                name: "The set of portfolios with no better risk-return alternative" },

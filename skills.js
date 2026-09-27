@@ -61,6 +61,26 @@ window.SKILLS = {
   ],
   "tags": [
     {
+      "tag": "agentic-workflows",
+      "name": "Agentic workflows",
+      "category": "programming",
+      "blurb": "Multi-step agents, tool use, frameworks such as LangGraph, and MCP",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "algorithmic-complexity",
+      "name": "Algorithmic complexity",
+      "category": "programming",
+      "blurb": "Big-O reasoning and container choice for hot paths: heaps, hash maps, deques and sorted structures, lazy deletion, O(1) rolling statistics and tail latency",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "alpha-research",
       "name": "Alpha research",
       "category": "trading",
@@ -91,12 +111,23 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "asyncio-concurrency",
+      "name": "Asyncio concurrency",
+      "category": "programming",
+      "blurb": "Event-loop concurrency in Python: coroutines, tasks and gather, bounded queues and backpressure, cancellation, reconnect with backoff, and keeping blocking work off the loop",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "backtesting",
       "name": "Backtesting",
       "category": "trading",
       "blurb": "Simulating a strategy on history without lying to yourself",
       "built_in": [
-        "FINM 33150"
+        "FINM 33150",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -205,6 +236,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "code-profiling",
+      "name": "Code profiling",
+      "category": "programming",
+      "blurb": "Measuring where time and memory actually go before optimising anything",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "code-review",
       "name": "Code review",
       "category": "programming",
@@ -220,7 +261,8 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Typed column-oriented formats such as parquet: projection, compression and pushdown",
       "built_in": [
-        "FINM 32800"
+        "FINM 32800",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -251,6 +293,16 @@ window.SKILLS = {
       "blurb": "Projection, penalty, barrier, augmented Lagrangian and interior-point methods for constrained programs",
       "built_in": [
         "FINM 34800"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "continuous-integration",
+      "name": "Continuous integration",
+      "category": "programming",
+      "blurb": "Automated build, test and check pipelines that gate every change",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -337,7 +389,8 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Automated data-quality checks that fail loudly before a model sees the data",
       "built_in": [
-        "FINM 32800"
+        "FINM 32800",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -357,6 +410,7 @@ window.SKILLS = {
       "category": "risk",
       "blurb": "Peak-to-trough loss as the risk measure investors actually feel",
       "built_in": [
+        "FINM 33500",
         "FINM 36700"
       ],
       "assumed_in": []
@@ -409,6 +463,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "Auction and matching rules, fee schedules and listing design",
       "built_in": [
+        "FINM 33500",
         "FINM 35100",
         "FINM 37601"
       ],
@@ -475,7 +530,8 @@ window.SKILLS = {
       "blurb": "Branching, review through pull requests, and a readable history",
       "built_in": [],
       "assumed_in": [
-        "FINM 32800"
+        "FINM 32800",
+        "FINM 33500"
       ]
     },
     {
@@ -533,7 +589,8 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Idempotent, restartable jobs: watermarks, upserts, late data and backfills",
       "built_in": [
-        "FINM 32800"
+        "FINM 32800",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -639,6 +696,7 @@ window.SKILLS = {
       ],
       "assumed_in": [
         "FINM 33165",
+        "FINM 33500",
         "FINM 34000",
         "FINM 34600",
         "FINM 34700",
@@ -655,6 +713,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "Supplying two-sided quotes and being paid for immediacy and risk",
       "built_in": [
+        "FINM 33500",
         "FINM 35100",
         "FINM 37601"
       ],
@@ -665,7 +724,9 @@ window.SKILLS = {
       "name": "Logistic regression",
       "category": "stats-ml",
       "blurb": "Modelling a binary outcome through the log-odds link",
-      "built_in": [],
+      "built_in": [
+        "FINM 33500"
+      ],
       "assumed_in": [
         "FINM 34800"
       ]
@@ -677,6 +738,16 @@ window.SKILLS = {
       "blurb": "Initial and maintenance margin, funding and forced liquidation",
       "built_in": [
         "FINM 37000"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "market-data-feeds",
+      "name": "Market data feeds",
+      "category": "data",
+      "blurb": "Real-time and historical feed handling, sequencing and gap recovery",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -698,6 +769,7 @@ window.SKILLS = {
       "blurb": "Running a quoting book: spread capture, inventory and adverse selection",
       "built_in": [
         "FINM 33150",
+        "FINM 33500",
         "FINM 37601"
       ],
       "assumed_in": []
@@ -708,6 +780,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "Price formation at short horizons and the behaviour of market participants",
       "built_in": [
+        "FINM 33500",
         "FINM 34600",
         "FINM 35100",
         "FINM 37601"
@@ -797,6 +870,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "model-ops",
+      "name": "Model ops",
+      "category": "stats-ml",
+      "blurb": "Moving a model into production: versioned artifacts with a model card, serving inside a latency budget, drift monitoring, kill switches and retraining",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "monte-carlo-pricing",
       "name": "Monte carlo pricing",
       "category": "pricing",
@@ -841,6 +924,7 @@ window.SKILLS = {
         "FINM 33000",
         "FINM 33150",
         "FINM 33165",
+        "FINM 33500",
         "FINM 34000",
         "FINM 34600",
         "FINM 34700",
@@ -853,6 +937,16 @@ window.SKILLS = {
         "FINM 37500",
         "FINM 37601"
       ]
+    },
+    {
+      "tag": "object-oriented-design",
+      "name": "Object oriented design",
+      "category": "programming",
+      "blurb": "Modelling a domain as classes behind abstract interfaces: abstract base classes, encapsulation, composition over inheritance, the Strategy and Adapter patterns, and UML class diagrams",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
     },
     {
       "tag": "optimal-execution",
@@ -881,6 +975,7 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Depth-of-book and message-level exchange data, e.g. CME Globex",
       "built_in": [
+        "FINM 33500",
         "FINM 34600",
         "FINM 37601"
       ],
@@ -892,6 +987,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "How a limit order book fills, queues, refreshes and reveals information",
       "built_in": [
+        "FINM 33500",
         "FINM 35100",
         "FINM 37601"
       ],
@@ -903,7 +999,18 @@ window.SKILLS = {
       "category": "trading",
       "blurb": "Limit, market, stop and conditional orders, and when each is right",
       "built_in": [
+        "FINM 33500",
         "FINM 37601"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "parallel-programming",
+      "name": "Parallel programming",
+      "category": "programming",
+      "blurb": "Decomposing work across cores; races, synchronisation and scaling limits",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -936,6 +1043,16 @@ window.SKILLS = {
       "blurb": "Turning signals into positions under real constraints and costs",
       "built_in": [
         "FINM 36700"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "pre-trade-risk-controls",
+      "name": "Pre trade risk controls",
+      "category": "risk",
+      "blurb": "Controls in front of every order: price collars, notional and position limits, message quotas, loss limits and a latched kill switch",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -974,7 +1091,9 @@ window.SKILLS = {
       "name": "Python pandas",
       "category": "programming",
       "blurb": "DataFrames: joins, groupby, resampling and time-series indexing",
-      "built_in": [],
+      "built_in": [
+        "FINM 33500"
+      ],
       "assumed_in": [
         "FINM 32800",
         "FINM 33150",
@@ -1003,7 +1122,8 @@ window.SKILLS = {
         "FINM 34000"
       ],
       "assumed_in": [
-        "FINM 33000"
+        "FINM 33000",
+        "FINM 33500"
       ]
     },
     {
@@ -1033,7 +1153,8 @@ window.SKILLS = {
       "blurb": "Build automation and dependency pinning so a result can be regenerated",
       "built_in": [
         "FINM 32800",
-        "FINM 33165"
+        "FINM 33165",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1079,7 +1200,8 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Registered schemas, drift detection and compatible change to a dataset's shape",
       "built_in": [
-        "FINM 32800"
+        "FINM 32800",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1089,9 +1211,20 @@ window.SKILLS = {
       "category": "risk",
       "blurb": "Risk-adjusted return, its estimation error and its abuse",
       "built_in": [
+        "FINM 33500",
         "FINM 36700"
       ],
       "assumed_in": []
+    },
+    {
+      "tag": "shell-and-filesystem",
+      "name": "Shell and filesystem",
+      "category": "programming",
+      "blurb": "The command line, paths, streams, pipes and exit codes as a programming interface",
+      "built_in": [],
+      "assumed_in": [
+        "FINM 33500"
+      ]
     },
     {
       "tag": "signal-construction",
@@ -1101,6 +1234,7 @@ window.SKILLS = {
       "built_in": [
         "FINM 33150",
         "FINM 33165",
+        "FINM 33500",
         "FINM 35100"
       ],
       "assumed_in": []
@@ -1158,12 +1292,32 @@ window.SKILLS = {
       ]
     },
     {
+      "tag": "streaming-data",
+      "name": "Streaming data",
+      "category": "data",
+      "blurb": "Handling data that arrives continuously rather than as a file",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "swaptions",
       "name": "Swaptions",
       "category": "pricing",
       "blurb": "Options to enter a swap, and the vol surface they trade on",
       "built_in": [
         "FINM 37500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "systematic-trading",
+      "name": "Systematic trading",
+      "category": "trading",
+      "blurb": "A strategy expressed as a program that reads, decides, executes and manages risk",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1205,6 +1359,7 @@ window.SKILLS = {
       "category": "trading",
       "blurb": "Spread, fees, slippage and their effect on realised P&L",
       "built_in": [
+        "FINM 33500",
         "FINM 35100",
         "FINM 37601"
       ],
@@ -1217,6 +1372,16 @@ window.SKILLS = {
       "blurb": "Line searches, steepest descent, Newton, quasi-Newton, Gauss-Newton and root finding in one variable",
       "built_in": [
         "FINM 34800"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "unit-testing",
+      "name": "Unit testing",
+      "category": "programming",
+      "blurb": "pytest and friends: fixtures, property tests and regression tests",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1249,6 +1414,16 @@ window.SKILLS = {
       "built_in": [
         "FINM 37301",
         "FINM 37500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "walk-forward-validation",
+      "name": "Walk forward validation",
+      "category": "stats-ml",
+      "blurb": "Time-ordered model validation: expanding or rolling folds, embargoes against overlapping labels, leakage diagnosis and shuffled-label controls",
+      "built_in": [
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1455,6 +1630,69 @@ window.SKILLS = {
         "linear-regression",
         "numpy",
         "measure-theoretic-probability"
+      ]
+    },
+    {
+      "code": "FINM 33500",
+      "slug": "finm-33500",
+      "title": "Systematic Trading Technologies",
+      "instructor": "Sebastien Donadio",
+      "quarter": "Autumn",
+      "units": 100,
+      "block": "computing",
+      "tier": "A",
+      "concentrations": [],
+      "weeks": 10,
+      "concepts": 50,
+      "mcqs": 40,
+      "widgets": 10,
+      "prerequisites": [
+        "Comfortable, working Python: functions, classes, modules, pip, a debugger and git (the syllabus's stated requirement).",
+        "Python 3.11 or newer on your own laptop. No paid data, no cloud account and no brokerage account are needed.",
+        "No trading or market-structure background: markets are taught from scratch, and a free finance primer site accompanies the course.",
+        "Pairs with FINM 32700 (Low-Latency Trading Systems, C++), which takes the same market down to the microsecond; this course stands on its own."
+      ],
+      "skills_built": [
+        "systematic-trading",
+        "market-microstructure",
+        "order-book-dynamics",
+        "order-book-data",
+        "order-types",
+        "transaction-costs",
+        "market-making",
+        "liquidity-provision",
+        "exchange-mechanism-design",
+        "market-data-feeds",
+        "streaming-data",
+        "schema-evolution",
+        "data-validation",
+        "backtesting",
+        "sharpe-ratio",
+        "drawdown",
+        "signal-construction",
+        "code-profiling",
+        "python-pandas",
+        "columnar-storage",
+        "incremental-processing",
+        "parallel-programming",
+        "logistic-regression",
+        "unit-testing",
+        "continuous-integration",
+        "reproducible-research",
+        "agentic-workflows",
+        "asyncio-concurrency",
+        "object-oriented-design",
+        "algorithmic-complexity",
+        "walk-forward-validation",
+        "model-ops",
+        "pre-trade-risk-controls"
+      ],
+      "skills_assumed": [
+        "numpy",
+        "git-version-control",
+        "shell-and-filesystem",
+        "linear-regression",
+        "random-walk"
       ]
     },
     {
