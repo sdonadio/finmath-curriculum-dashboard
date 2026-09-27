@@ -1,0 +1,37 @@
+[
+  {
+    "tag": "cache-aware-data-layout",
+    "category": "programming",
+    "name": "Designing data for the memory hierarchy: cache lines, padding and alignment, struct-of-arrays, false sharing and flat price-indexed structures"
+  },
+  {
+    "tag": "custom-memory-allocators",
+    "category": "programming",
+    "name": "Removing the heap from the hot path: fixed-size object pools, arena (bump) allocators, placement new and std::pmr memory resources"
+  },
+  {
+    "tag": "atomics-memory-ordering",
+    "category": "programming",
+    "name": "std::atomic, compare-and-swap, happens-before and acquire/release ordering; data races, ABA and seqlocks"
+  },
+  {
+    "tag": "tail-latency-measurement",
+    "category": "programming",
+    "name": "Measuring latency honestly: p50/p99/p99.9 of a sorted sample, log-linear histograms, coordinated omission and tail attribution"
+  },
+  {
+    "tag": "binary-protocol-parsing",
+    "category": "data",
+    "name": "Wire formats on the hot path: FIX tag=value, fixed-width binary feeds, framing, sequencing and gap fill, zero-copy field extraction"
+  },
+  {
+    "tag": "kernel-bypass-networking",
+    "category": "programming",
+    "name": "Getting the OS out of the way: busy-polling, kernel bypass, CPU pinning and isolation, huge pages and interrupt coalescing"
+  },
+  {
+    "tag": "latency-arbitrage",
+    "category": "trading",
+    "name": "Cross-venue trading at speed: the NBBO, stale-quote pickoff, colocation and the fee hurdle that decides whether a cross pays"
+  }
+]

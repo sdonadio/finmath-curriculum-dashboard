@@ -121,6 +121,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "atomics-memory-ordering",
+      "name": "Atomics memory ordering",
+      "category": "programming",
+      "blurb": "std::atomic, compare-and-swap, happens-before and acquire/release ordering; data races, ABA and seqlocks",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "backtesting",
       "name": "Backtesting",
       "category": "trading",
@@ -138,6 +148,16 @@ window.SKILLS = {
       "blurb": "Prior, likelihood and posterior as a working tool: odds-form updating, conjugate models and sequential learning",
       "built_in": [
         "FINM 35100"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "binary-protocol-parsing",
+      "name": "Binary protocol parsing",
+      "category": "data",
+      "blurb": "Wire formats on the hot path: FIX tag=value, fixed-width binary feeds, framing, sequencing and gap fill, zero-copy field extraction",
+      "built_in": [
+        "FINM 32700"
       ],
       "assumed_in": []
     },
@@ -191,6 +211,16 @@ window.SKILLS = {
       ]
     },
     {
+      "tag": "cache-aware-data-layout",
+      "name": "Cache aware data layout",
+      "category": "programming",
+      "blurb": "Designing data for the memory hierarchy: cache lines, padding and alignment, struct-of-arrays, false sharing and flat price-indexed structures",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "canonical-correlation",
       "name": "Canonical correlation",
       "category": "stats-ml",
@@ -241,6 +271,7 @@ window.SKILLS = {
       "category": "programming",
       "blurb": "Measuring where time and memory actually go before optimising anything",
       "built_in": [
+        "FINM 32700",
         "FINM 33500"
       ],
       "assumed_in": []
@@ -354,6 +385,26 @@ window.SKILLS = {
       ]
     },
     {
+      "tag": "cpp-stl",
+      "name": "Cpp stl",
+      "category": "programming",
+      "blurb": "Standard containers, iterators and algorithms, and their complexity guarantees",
+      "built_in": [],
+      "assumed_in": [
+        "FINM 32700"
+      ]
+    },
+    {
+      "tag": "cpp-templates",
+      "name": "Cpp templates",
+      "category": "programming",
+      "blurb": "Generic programming with templates, traits and compile-time dispatch",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "crsp-compustat",
       "name": "Crsp compustat",
       "category": "data",
@@ -370,6 +421,16 @@ window.SKILLS = {
       "blurb": "Cryptotokens, centralised venues, perpetuals and the institutional plumbing",
       "built_in": [
         "FINM 35100"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "custom-memory-allocators",
+      "name": "Custom memory allocators",
+      "category": "programming",
+      "blurb": "Removing the heap from the hot path: fixed-size object pools, arena (bump) allocators, placement new and std::pmr memory resources",
+      "built_in": [
+        "FINM 32700"
       ],
       "assumed_in": []
     },
@@ -530,6 +591,7 @@ window.SKILLS = {
       "blurb": "Branching, review through pull requests, and a readable history",
       "built_in": [],
       "assumed_in": [
+        "FINM 32700",
         "FINM 32800",
         "FINM 33500"
       ]
@@ -595,6 +657,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "inter-process-communication",
+      "name": "Inter process communication",
+      "category": "programming",
+      "blurb": "Shared memory, sockets and message buses between processes",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "interest-rate-risk",
       "name": "Interest rate risk",
       "category": "risk",
@@ -646,6 +718,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "kernel-bypass-networking",
+      "name": "Kernel bypass networking",
+      "category": "programming",
+      "blurb": "Getting the OS out of the way: busy-polling, kernel bypass, CPU pinning and isolation, huge pages and interrupt coalescing",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "lasso",
       "name": "Lasso",
       "category": "stats-ml",
@@ -653,6 +735,16 @@ window.SKILLS = {
       "built_in": [
         "FINM 34700",
         "FINM 34800"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "latency-arbitrage",
+      "name": "Latency arbitrage",
+      "category": "trading",
+      "blurb": "Cross-venue trading at speed: the NBBO, stale-quote pickoff, colocation and the fee hurdle that decides whether a cross pays",
+      "built_in": [
+        "FINM 32700"
       ],
       "assumed_in": []
     },
@@ -720,6 +812,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "lock-free-queues",
+      "name": "Lock free queues",
+      "category": "programming",
+      "blurb": "Wait-free and lock-free message passing on a hot path",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "logistic-regression",
       "name": "Logistic regression",
       "category": "stats-ml",
@@ -730,6 +832,16 @@ window.SKILLS = {
       "assumed_in": [
         "FINM 34800"
       ]
+    },
+    {
+      "tag": "low-latency-design",
+      "name": "Low latency design",
+      "category": "programming",
+      "blurb": "Engineering for tail latency: allocation, branching, syscalls and jitter",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
     },
     {
       "tag": "margin-and-leverage",
@@ -747,6 +859,7 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Real-time and historical feed handling, sequencing and gap recovery",
       "built_in": [
+        "FINM 32700",
         "FINM 33500"
       ],
       "assumed_in": []
@@ -768,6 +881,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "Running a quoting book: spread capture, inventory and adverse selection",
       "built_in": [
+        "FINM 32700",
         "FINM 33150",
         "FINM 33500",
         "FINM 37601"
@@ -780,6 +894,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "Price formation at short horizons and the behaviour of market participants",
       "built_in": [
+        "FINM 32700",
         "FINM 33500",
         "FINM 34600",
         "FINM 35100",
@@ -876,6 +991,16 @@ window.SKILLS = {
       "blurb": "Moving a model into production: versioned artifacts with a model card, serving inside a latency budget, drift monitoring, kill switches and retraining",
       "built_in": [
         "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "modern-cpp",
+      "name": "Modern cpp",
+      "category": "programming",
+      "blurb": "C++17/20/23 features for reliable, performance-sensitive code",
+      "built_in": [
+        "FINM 32700"
       ],
       "assumed_in": []
     },
@@ -987,6 +1112,7 @@ window.SKILLS = {
       "category": "markets",
       "blurb": "How a limit order book fills, queues, refreshes and reveals information",
       "built_in": [
+        "FINM 32700",
         "FINM 33500",
         "FINM 35100",
         "FINM 37601"
@@ -999,6 +1125,7 @@ window.SKILLS = {
       "category": "trading",
       "blurb": "Limit, market, stop and conditional orders, and when each is right",
       "built_in": [
+        "FINM 32700",
         "FINM 33500",
         "FINM 37601"
       ],
@@ -1010,6 +1137,7 @@ window.SKILLS = {
       "category": "programming",
       "blurb": "Decomposing work across cores; races, synchronisation and scaling limits",
       "built_in": [
+        "FINM 32700",
         "FINM 33500"
       ],
       "assumed_in": []
@@ -1223,6 +1351,7 @@ window.SKILLS = {
       "blurb": "The command line, paths, streams, pipes and exit codes as a programming interface",
       "built_in": [],
       "assumed_in": [
+        "FINM 32700",
         "FINM 33500"
       ]
     },
@@ -1322,6 +1451,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "tail-latency-measurement",
+      "name": "Tail latency measurement",
+      "category": "programming",
+      "blurb": "Measuring latency honestly: p50/p99/p99.9 of a sorted sample, log-linear histograms, coordinated omission and tail attribution",
+      "built_in": [
+        "FINM 32700"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "tail-risk",
       "name": "Tail risk",
       "category": "risk",
@@ -1359,6 +1498,7 @@ window.SKILLS = {
       "category": "trading",
       "blurb": "Spread, fees, slippage and their effect on realised P&L",
       "built_in": [
+        "FINM 32700",
         "FINM 33500",
         "FINM 35100",
         "FINM 37601"
@@ -1381,6 +1521,7 @@ window.SKILLS = {
       "category": "programming",
       "blurb": "pytest and friends: fixtures, property tests and regression tests",
       "built_in": [
+        "FINM 32700",
         "FINM 33500"
       ],
       "assumed_in": []
@@ -1462,6 +1603,57 @@ window.SKILLS = {
     }
   ],
   "courses": [
+    {
+      "code": "FINM 32700",
+      "slug": "finm-32700",
+      "title": "Low Latency Trading Systems",
+      "instructor": "Sebastien Donadio",
+      "quarter": "Spring",
+      "units": 100,
+      "block": "electives",
+      "tier": "A",
+      "concentrations": [
+        "financial-computing"
+      ],
+      "weeks": 9,
+      "concepts": 45,
+      "mcqs": 36,
+      "widgets": 9,
+      "prerequisites": [
+        "Working C++: classes, references and pointers, the standard containers and algorithms, and building a multi-file project with CMake. Session 2 revisits pointers, constructors and destructors, but it moves fast; FINM 32600 (Computing for Finance in C++) or equivalent experience is the right preparation.",
+        "Comfort at the command line and with git: you clone a starter repository, build it, run tests with make, and submit work from your own repository every week.",
+        "Basic market vocabulary: bid, ask, spread, limit and market orders. Session 1 builds the order book from scratch, but it helps to have met these terms before (FINM 33500 covers them in depth).",
+        "Enough probability to read a distribution by its percentiles rather than its mean; nothing beyond an introductory course."
+      ],
+      "skills_built": [
+        "low-latency-design",
+        "modern-cpp",
+        "cpp-templates",
+        "lock-free-queues",
+        "parallel-programming",
+        "inter-process-communication",
+        "code-profiling",
+        "market-microstructure",
+        "order-book-dynamics",
+        "market-making",
+        "market-data-feeds",
+        "order-types",
+        "transaction-costs",
+        "unit-testing",
+        "cache-aware-data-layout",
+        "custom-memory-allocators",
+        "atomics-memory-ordering",
+        "tail-latency-measurement",
+        "binary-protocol-parsing",
+        "kernel-bypass-networking",
+        "latency-arbitrage"
+      ],
+      "skills_assumed": [
+        "cpp-stl",
+        "git-version-control",
+        "shell-and-filesystem"
+      ]
+    },
     {
       "code": "FINM 32800",
       "slug": "finm-32800",

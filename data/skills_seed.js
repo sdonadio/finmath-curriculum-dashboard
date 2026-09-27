@@ -99,6 +99,11 @@ window.SKILLS_SEED = {
     { tag: "cds-pricing",                       name: "Credit default swap valuation from hazard rates and recovery assumptions" },
   ],
   "programming": [
+    { tag: "kernel-bypass-networking", name: "Getting the OS out of the way: busy-polling, kernel bypass, CPU pinning and isolation, huge pages and interrupt coalescing" },
+    { tag: "tail-latency-measurement", name: "Measuring latency honestly: p50/p99/p99.9 of a sorted sample, log-linear histograms, coordinated omission and tail attribution" },
+    { tag: "atomics-memory-ordering", name: "std::atomic, compare-and-swap, happens-before and acquire/release ordering; data races, ABA and seqlocks" },
+    { tag: "custom-memory-allocators", name: "Removing the heap from the hot path: fixed-size object pools, arena (bump) allocators, placement new and std::pmr memory resources" },
+    { tag: "cache-aware-data-layout", name: "Designing data for the memory hierarchy: cache lines, padding and alignment, struct-of-arrays, false sharing and flat price-indexed structures" },
     { tag: "algorithmic-complexity", name: "Big-O reasoning and container choice for hot paths: heaps, hash maps, deques and sorted structures, lazy deletion, O(1) rolling statistics and tail latency" },
     { tag: "object-oriented-design", name: "Modelling a domain as classes behind abstract interfaces: abstract base classes, encapsulation, composition over inheritance, the Strategy and Adapter patterns, and UML class diagrams" },
     { tag: "asyncio-concurrency", name: "Event-loop concurrency in Python: coroutines, tasks and gather, bounded queues and backpressure, cancellation, reconnect with backoff, and keeping blocking work off the loop" },
@@ -125,6 +130,7 @@ window.SKILLS_SEED = {
     { tag: "code-review",                            name: "Reading someone else's diff for defects, clarity and reproducibility" },
   ],
   "data": [
+    { tag: "binary-protocol-parsing", name: "Wire formats on the hot path: FIX tag=value, fixed-width binary feeds, framing, sequencing and gap fill, zero-copy field extraction" },
     { tag: "etl-pipelines",                     name: "Extract, transform and load as a reproducible, automated pipeline" },
     { tag: "data-validation",                   name: "Automated data-quality checks that fail loudly before a model sees the data" },
     { tag: "reproducible-research",             name: "Build automation and dependency pinning so a result can be regenerated" },
@@ -166,6 +172,7 @@ window.SKILLS_SEED = {
     { tag: "hedging",                           name: "Offsetting an unwanted exposure and the basis risk left behind" },
   ],
   "trading": [
+    { tag: "latency-arbitrage", name: "Cross-venue trading at speed: the NBBO, stale-quote pickoff, colocation and the fee hurdle that decides whether a cross pays" },
     { tag: "systematic-trading",                name: "A strategy expressed as a program that reads, decides, executes and manages risk" },
     { tag: "backtesting",                       name: "Simulating a strategy on history without lying to yourself" },
     { tag: "signal-construction",               name: "Turning raw data into a predictive, tradeable signal" },

@@ -1958,3 +1958,1600 @@ print("fastest p50:", teams[int(np.argmin(p50_us))], "| best p99.9:", teams[int(
       "| composite winner:", teams[int(order[0])])
 print(f"mean p99.9 {p999_us.mean():.0f} us vs median {np.median(p999_us):.0f} us -- one tail drags the mean")
 '''
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Weeks. Prose was written after each snippet's real output was seen.
+# ─────────────────────────────────────────────────────────────────────────
+WEEKS = []
+
+
+def code(key):
+    """A concept's code block; output is filled by tools/run_snippets.py."""
+    lang = "python" if SRC[key].startswith("import numpy") else "cpp"
+    return {"lang": lang, "src": SRC[key], "output": ""}
+
+
+def C(name, key, explain, formula=None):
+    """One concept: name, explain HTML, optional KaTeX formula, code block."""
+    d = {"name": name, "explain": " ".join(explain.split())}
+    if formula:
+        d["formula"] = formula
+    d["code"] = code(key)
+    return d
+
+
+def A(url, text):
+    return '<a href="%s">%s</a>' % (url, text)
+
+
+# ═══ Week 1 · Session 1 ═══
+WEEKS.append({
+    "n": 1,
+    "title": "Session 1 · The HFT landscape and market microstructure: the book, the queue and the p99.9 grade",
+    "topics": [
+        "what high-frequency trading is: a race, not a forecast",
+        "the latency arms race: colocation, microwave, kernel bypass, FPGAs",
+        "the central limit order book as two sorted sides",
+        "price-time priority and the FIFO queue at every price",
+        "orders, fills and maker/taker fees",
+        "tick-to-trade and why the grade is the p99.9, not the mean",
+        "Lab 1: build the C++ client, connect and get on the latency board",
+    ],
+    "concepts": [
+        C("The book is two sorted sides, held in integer ticks", "w1c1", """
+Every venue in this course, the arena included, runs one matching engine over a central limit order book:
+resting buys on the bid side sorted high to low, resting sells on the ask side sorted low to high (Deck U1,
+"The Central Limit Order Book (CLOB)"). The snippet builds exactly that with two <code>std::map</code>s and
+reads the four numbers your <code>on_book</code> hook is handed every tick: the touch 100.02 x 600 / 100.04 x
+300, a 2-bps spread, a microprice of 100.0333 and an order-book imbalance of +0.333. The microprice weights
+each side's price by the <em>other</em> side's size, so a heavy bid pulls fair value up toward the ask.
+<br><br>
+The last line is the first performance lesson in disguise. Ten one-cent moves on a <code>double</code> land at
+100.10000000000005, which is not equal to 100.10; ten moves on an integer tick land on 10010 exactly. Prices
+live on a discrete grid, so hold them as integers. That same fact is what licenses the flat, price-indexed
+book of session 4: if prices are integers on a grid, a level's address is arithmetic, not a search.
+<br><br>
+In the lab you meet this in Lab 1, Step 1 "Read the map: <code>make test</code>": the reference client's
+book view is the structure above. In the arena this shows up as the touch and depth your bot reads on every
+<code>book_snapshot</code>; the
+""" + A(HFT_SKILLS, "FINM HFT skills dashboard") + """ works the same four numbers for session 1.
+""", r"\text{micro} = \frac{P_b\,Q_a + P_a\,Q_b}{Q_a + Q_b},\qquad \text{OBI} = \frac{Q_b - Q_a}{Q_b + Q_a}"),
+        C("Price first, then time; trades print at the resting price", "w1c2", """
+Two rules decide who trades (Deck U1, "Price-Time Priority &amp; the Queue"). A better price always executes
+first; at the same price the order that arrived earlier fills first, a strict FIFO queue per level. When an
+aggressive order crosses, each slice prints at the <em>resting</em> order's price, not at the aggressor's
+limit. The snippet keeps one <code>std::deque</code> per price level and sweeps it. A buy of 450 limit
+100.05 fills A2 (200) and A3 (100) at 100.04 before it touches the older A1 at 100.05: price beats time, and
+time breaks the tie between A2 and A3. The average paid is 100.0433, worse than the touch the buyer saw when
+it decided. A market buy of 400 then finds only 150 left and the remaining 250 is cancelled, because a market
+order never rests.
+<br><br>
+Why this is a latency course and not just a microstructure one: the second rule is where speed turns into
+money. Being early in the queue at a price means you fill before the price moves; arriving late puts you
+behind everyone who got there first. Queue position is what latency actually buys.
+<br><br>
+In the lab, Lab 1 Step 3 "Connect and get on the board" sends your first limit order and cancel through the
+C++ client; watch the acknowledgement's queue fields. In the arena this is the engine's own rule set, and the
+same deque-per-level picture returns as the flat book in session 4.
+"""),
+        C("Maker/taker fees: the hurdle a trade must clear", "w1c3", """
+The arena prints its fee schedule on connect, and in the session-1 lab it is 30 bps of notional for the taker
+and a 5 bps rebate for the maker (Deck U1, "Orders, Fills &amp; Fees"). On a 200-share clip at 182.50 that
+is a 109.50 fee against an 18.25 rebate: a 127.75 swing decided entirely by whether you crossed the spread or
+waited to be crossed. The snippet turns that into the only number that matters for a strategy: the net fee
+hurdle of a round trip. Taker in and taker out costs 60 bps; maker in and taker out costs 25 bps; maker on
+both legs is paid 10 bps.
+<br><br>
+Two consequences shape the rest of the term. First, a one-cent spread on this stock is only 0.55 bps, so the
+fee, not the spread, dominates the arithmetic of crossing. Second, a 3-bps signal nets &minus;57 bps as a
+taker round trip and +13 bps as a maker round trip: small edges are only ever tradeable passively, which
+means they are only tradeable if you win queue position. That is why speed matters even to a patient
+strategy.
+<br><br>
+In the lab, Lab 1 Step 4 "Where the metrics come from" has you read the fee lines your client logs. In the
+arena the tournament debrief puts a TCA report on screen, fees paid against rebates earned per team, which
+is this snippet in dollars.
+""", r"\text{hurdle}_{\text{bps}} = 10^4\,(f_1 + f_2),\quad f = +0.0030\ \text{(taker)},\ -0.0005\ \text{(maker)}"),
+        C("Tick-to-trade, and why the mean lies", "w1c4", """
+Tick-to-trade is the time from market data arriving at your socket to your order leaving it: parse, decide,
+serialise, send (Deck U1, "The Metric That Grades You: Tail Latency"). This course grades p50, p99 and
+p99.9, and the headline is the last one, because the races that decide P&amp;L are the volatile ticks when
+everyone fires at once, exactly when a bad tail appears. The snippet draws a deterministic synthetic sample
+of 100,000 ticks: a tight body between 35 and 45 &micro;s, 1.6% cache-cold ticks and 0.4% stalls of a few
+milliseconds, the signature of a page fault or a preempted thread.
+<br><br>
+The printed table is the argument. The median is 40.1 &micro;s, the p99 136.0, the p99.9 3735.0 and the max
+4838.4. The mean, 51.6 &micro;s, describes no tick that happened: not a single one of the 100,000 samples lies
+within 3 &micro;s of it. The p99.9 is 93 times the median. A latency distribution is heavy-tailed and often
+bimodal, and a mean averages the valley between the modes.
+<br><br>
+The snippet reports nearest-rank percentiles of a sorted sample, which is what the course's replay harness
+does. It never times anything: the numbers are a stated synthetic distribution, so the output is the same on
+every machine. In the lab you read your own version in Lab 1 Step 4 from the replay report; in the arena it is
+the LATENCY tab.
+""", r"p_q = x_{(\lceil q n \rceil)}\ \text{of the sorted sample } x_{(1)} \le \dots \le x_{(n)}"),
+        C("The arms race: what is coded and what is bought", "w1c5", """
+For two decades the industry has paid for microseconds: rack space next to the matching engine, then
+microwave links, then kernel-bypass network cards, then FPGAs, each rung a smaller slice of latency at a
+steeper price (Deck U1, "The Latency Arms Race" and "Participants, Venues &amp; Colocation"). The arena models
+the rung you can buy. The exchange delays each team's outbound messages by its tier: 200 ms by default, 20 ms
+with colocation from the shop (<code>LATENCY_MS_DEFAULT</code> against <code>LATENCY_MS_COLOCATED</code>).
+<br><br>
+The snippet races three bots 10,000 times. A, with fast code on the default tier, wins nothing. B, with slow
+code but colocated, beats A in all 10,000 head-to-head races, because a 180 ms tier gap swamps any code
+difference. C, with fast code and colocation, wins 9,988 of the three-way races. The lesson is the order of
+operations. When tiers differ, the tier dominates; once everyone serious has bought the same tier, the race is
+decided by what you coded, and the tail of that code decides the busy ticks.
+<br><br>
+In the lab, session 1 is the on-ramp: connecting, appearing on the LATENCY board and reading your replay
+percentiles are ungraded, and you write your baseline down. In the arena colocation is an upgrade you buy with
+season cash, and session 9 asks whether it paid.
+"""),
+    ],
+    "widget": {
+        "type": "orderbook",
+        "title": "A seeded limit order book: touch, depth and a sweep through the levels",
+        "params": {"levels": 8, "spread": 2, "seed": 32701, "mid": 100.03, "tick": 0.01, "size": 600},
+    },
+    "pitfalls": [
+        "Holding prices as doubles: ten one-cent moves do not land on the value you expect, and equality tests on a price level silently fail. Use integer ticks.",
+        "Believing your order trades at your limit. It trades at the resting order's price, and a sweep through two levels gets a blended average worse than the touch.",
+        "Reporting a mean latency. Heavy-tailed, bimodal samples put the mean in a valley no tick visited; report p50, p99 and p99.9 of a sorted sample.",
+        "Ignoring fees when judging an edge: at 30 bps taker, a round trip needs a 60-bps move before it earns anything.",
+    ],
+    "check": [
+        {"q": "Two sell orders rest at 100.04: A2 arrived before A3. A buy limit 100.05 for 250 arrives, and A1 rests at 100.05 but is older than both. Who fills first?",
+         "options": ["A1, because it is the oldest order in the book", "A2, then A3: the better price first, and time priority within 100.04", "A2 and A3 pro rata", "A1 and A2 together, since both prices are within the limit"],
+         "answer": 1,
+         "why": "Price beats time: 100.04 is better for a buyer than 100.05, so the 100.04 queue is exhausted first, and within it A2 precedes A3 by arrival. A1's age only matters against other orders at 100.05. There is no pro-rata allocation in a price-time book."},
+        {"q": "A bid of 100.02 x 500 faces an ask of 100.04 x 300. Where is the microprice?",
+         "options": ["100.0300, at the mid", "100.0275, below the mid because the ask is thinner", "100.0325, above the mid because the bid is heavier", "100.0400, at the ask"],
+         "answer": 2,
+         "why": "Microprice = (100.02 x 300 + 100.04 x 500) / 800 = 100.0325. Each price is weighted by the opposite side's size, so the heavy bid pulls fair value toward the ask. The mid ignores size, and the ask is only reached when the bid side is infinitely heavier."},
+        {"q": "A bot reports mean 52 us, p50 40 us, p99.9 3.7 ms. Which statement is right?",
+         "options": ["The mean is the best summary because it uses every sample", "The p99.9 is an outlier artefact and should be dropped", "The tail is what loses the volatile races; the mean describes almost no real tick", "p50 and mean agree closely, so the distribution is symmetric"],
+         "answer": 2,
+         "why": "A heavy tail drags the mean away from the body without describing either mode; in the snippet no sample lies within 3 us of the mean. The p99.9 is the graded number precisely because busy ticks are where stalls land. Dropping it hides the problem, and a 30% gap between mean and median is a sign of skew, not symmetry."},
+        {"q": "Under the session-1 schedule (taker 30 bps, maker rebate 5 bps), which round trip can a 3-bps edge profit from?",
+         "options": ["Taker in, taker out", "Maker in, taker out", "Maker in, maker out", "None: fees always exceed 3 bps"],
+         "answer": 2,
+         "why": "Maker on both legs is paid 10 bps, so a 3-bps edge nets +13 bps. Taker-taker costs 60 bps and maker-taker 25 bps, both far above the edge. Hence small edges must be traded passively, which makes queue position, and so latency, decisive."},
+    ],
+})
+
+# ═══ Week 2 · Session 2 ═══
+WEEKS.append({
+    "n": 2,
+    "title": "Session 2 · C++ performance and memory: the hierarchy, layout, pointers and ownership",
+    "topics": [
+        "the memory hierarchy: registers, L1/L2/L3, DRAM, and stack versus heap",
+        "pointers, references and pointer arithmetic; a matrix as one contiguous block",
+        "data layout: sizeof, padding, array-of-structs versus struct-of-arrays",
+        "the 64-byte cache line, alignment and false sharing",
+        "honest benchmarking: release builds, warm-up, sinks, percentiles",
+        "classes: constructors, destructors, copy and move, the rule of zero and of five",
+        "RAII and smart pointers: unique_ptr, shared_ptr, weak_ptr",
+    ],
+    "concepts": [
+        C("The memory hierarchy, counted in cache misses", "w2c1", """
+The CPU is fast and memory is far: an L1 hit costs about a nanosecond and a miss to DRAM about a hundred, so
+one miss costs what a hundred hits cost (Deck U2, "The Memory Hierarchy &mdash; Where &micro;s Hide"). The unit
+of transfer is a 64-byte line, and the unit of optimisation is therefore the memory access, not the
+instruction. The snippet makes that concrete without a stopwatch: it is a pure-CPU model of a 32 KB, 8-way,
+LRU L1 cache that is fed addresses and counts misses.
+<br><br>
+A sequential scan of 1 MB of ints misses 6.25% of the time, one miss per sixteen ints, because each line
+brings sixteen neighbours. Touching one int per line misses every time. Random indexing, which is what
+chasing pointers through a node-based container looks like to the cache, misses 96.9%. A 16 KB working set
+reused sixteen times misses 0.39%. With the stated model costs (1 ns hit, 100 ns miss) that is 7.2 against
+96.9 modelled ns per access for the same arithmetic.
+<br><br>
+The stack wins for the same reason: its top is almost always hot in L1, while a heap object may sit on a
+cold line. In the lab this is the background for the combined lab's Step 2 "Stack vs heap, and the sink that
+makes it honest". In the arena it is why your <code>on_book</code> should read state that is already hot and
+contiguous, and why the widget below is drawn on a log scale.
+"""),
+        C("Layout is a latency decision: padding, AoS and SoA", "w2c2", """
+The compiler pads a struct so every field is aligned, and the padding is invisible in the source (Deck U2,
+"Value Semantics &amp; Data Layout &mdash; SoA vs AoS" and the appendix "Object Layout &mdash; sizeof, Padding
+&amp; Alignment"). The slide's <code>Quote</code> declares 52 bytes and occupies 56. Two structs with the same
+four fields differ by field order alone: <code>Padded</code> (char, double, char, int) is 24 bytes because the
+first char drags seven bytes of padding in front of the double; <code>Packed</code>, sorted by size, is 16.
+<code>offsetof</code> shows exactly where every field landed.
+<br><br>
+Now scan 1,024 prices. As an array of <code>Quote</code> the scan touches 896 cache lines, because every line
+carries mostly cold bytes you do not need; as a separate array of doubles (struct of arrays) it touches 128,
+seven times fewer, with identical arithmetic. SoA also gives the hardware prefetcher a regular unit stride, and
+it is the shape a vectoriser wants in session 8.
+<br><br>
+The practical rule: put the fields the hot path reads together, sort fields by size, and split hot from cold.
+In the lab this sits between the combined lab's steps as the layout reading assigned with HW 2. In the arena it
+is how you should hold your per-symbol state: one small, hot struct per symbol, with names, logs and
+statistics kept elsewhere.
+""", r"\text{lines} = \left\lceil \frac{n \cdot \mathrm{sizeof}(T)}{64} \right\rceil"),
+        C("Pointers, one contiguous block, and counting every new", "w2c3", """
+A pointer is an address with a type, and pointer arithmetic moves in elements, not bytes: <code>p + 1</code>
+is one element further on (Deck U2, "Pointer Arithmetic I &mdash; p + 1 Is One ELEMENT"). The snippet replaces
+the global <code>operator new</code> with a counting one, which is the honest way to see allocation, and
+builds a 100 x 50 matrix twice. The textbook <code>double**</code> costs 101 allocations, with rows scattered
+across the heap and two dependent loads per element. One contiguous block costs a single allocation, and
+<code>flat[i*C + j]</code> is one multiply-add: the addresses printed confirm one element is 8 bytes and one
+row is 50 elements (Deck U2, "A Matrix on the Heap &mdash; One Contiguous Block").
+<br><br>
+The same counter shows the cost of growth: 100,000 <code>push_back</code>s make 18 allocations without
+<code>reserve</code> and one with it. The allocation count is the thing to drive to zero on the hot path; its
+timing is unpredictable, since the allocator may walk a free list, take a lock or ask the kernel for a page.
+<br><br>
+A subtle point the snippet had to handle: at <code>-O2</code> the compiler is allowed to elide a
+<code>new</code>/<code>delete</code> pair whose pointer never escapes. Letting the pointer escape keeps the
+count honest, which is the benchmarking lesson of Deck U2's "Micro-benchmarking Pitfalls". In the lab this is
+Step 2 "Stack vs heap, and the sink that makes it honest".
+"""),
+        C("Copy, move and the rule of five", "w2c4", """
+A class that owns a resource must say what copying and moving mean (Deck U2, "Copy Semantics", "Move
+Semantics &mdash; The Two Functions You Write" and "Rule of Zero, Rule of Five"). Copy duplicates the
+resource; move steals it and leaves the source empty but valid. The snippet instruments all five special
+members of an <code>Order</code> that owns a heap buffer and pushes 1,000 of them into a vector with no
+<code>reserve</code>.
+<br><br>
+The result is the classic surprise. With a <code>noexcept</code> move constructor, every reallocation moves the
+existing elements: 1,023 moves and zero copies. Remove <code>noexcept</code> and the same code makes 1,023
+copies and zero moves, because <code>std::vector</code> must keep its strong exception guarantee and cannot
+risk a move that throws halfway through a reallocation. Each of those copies is a hidden heap allocation. After
+<code>std::move</code>, <code>a.note</code> is <code>nullptr</code> and <code>b</code> owns the buffer:
+nothing was copied.
+<br><br>
+The rule of zero is the default you should reach for: hold resources in members that already manage
+themselves (<code>std::vector</code>, <code>std::unique_ptr</code>) and write none of the five. When you must
+write them, write all five and mark the move operations <code>noexcept</code>. In the lab this is Step 5 "The
+Rule of Three, and the double-free you can see", where a class with a destructor but no copy constructor frees
+the same buffer twice.
+"""),
+        C("RAII and choosing a smart pointer", "w2c5", """
+RAII ties a resource's lifetime to a scope: acquire in the constructor, release in the destructor, and the
+compiler guarantees the release on every exit path, including exceptions (Deck U2, "RAII &mdash; Resource
+Acquisition Is Initialization"). <code>unique_ptr</code> is RAII for heap memory: sole ownership, move-only,
+and the snippet prints its size as 8 bytes, the same as a raw pointer. <code>shared_ptr</code> is 16 bytes,
+a pointer plus a pointer to a control block holding an <em>atomic</em> reference count. <code>make_shared</code>
+allocates object and control block together (one allocation); <code>shared_ptr(new T)</code> needs two.
+<br><br>
+Copying a <code>shared_ptr</code> three times raises the count to 4 and every copy and destruction is an
+atomic read-modify-write that bounces a cache line between cores: a hidden cost on a hot path. Two objects
+that hold <code>shared_ptr</code>s to each other never reach zero, and the snippet shows no destructor running:
+a leak. Making one direction a <code>weak_ptr</code> breaks the cycle and both destructors run. At the end of
+<code>main</code> the remaining owners are destroyed in reverse order of construction.
+<br><br>
+In the lab this is Step 4 "Fix it with <code>unique_ptr</code>" and Step 6 "The <code>shared_ptr</code>
+refcount tax, and why <code>on_book</code> must not pay it". In the arena the rule (Deck U2, "In the Arena
+&mdash; No Allocation on the Hot Path") is to own state once at startup and pass references into
+<code>on_book</code>.
+"""),
+    ],
+    "widget": {
+        "type": "curve",
+        "title": "The memory hierarchy on a log scale: typical access cost by level (order-of-magnitude figures)",
+        "params": {
+            "xlab": "Level (1 = register, 2 = L1, 3 = L2, 4 = L3, 5 = DRAM, 6 = page fault)",
+            "ylab": "Nanoseconds (log scale)",
+            "log": True,
+            "series": [
+                {"name": "Typical access cost", "x": [1, 2, 3, 4, 5, 6], "y": [0.3, 1, 4, 12, 100, 3000]},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Timing a loop whose result is never used: at -O2 the optimiser deletes the work, or even the allocation, and you measure nothing.",
+        "Declaring a move constructor without noexcept: std::vector then copies on every reallocation, and each copy may allocate.",
+        "Passing shared_ptr by value into the hot path: every copy is an atomic increment and decrement on a shared cache line.",
+        "Ordering struct fields carelessly: the padding the compiler inserts can make a struct 50% larger than its fields, and every scan pays for it.",
+    ],
+    "check": [
+        {"q": "struct S { char a; double b; char c; int d; }; on a typical 64-bit ABI, what is sizeof(S)?",
+         "options": ["14", "16", "24", "32"],
+         "answer": 2,
+         "why": "a sits at 0, b must be 8-aligned so it goes to 8, c at 16, d at 20, ending at 24, which is already a multiple of the 8-byte alignment. 14 ignores padding; 16 is the size after reordering fields by size, and 32 over-pads."},
+        {"q": "Why does std::vector copy, rather than move, elements on reallocation when the element's move constructor is not noexcept?",
+         "options": ["Moves are always slower than copies", "To keep the strong exception guarantee: a throwing move halfway through would leave both buffers damaged", "Because moving would invalidate iterators and copying does not", "The standard forbids moves inside containers"],
+         "answer": 1,
+         "why": "std::vector uses move_if_noexcept: if a move might throw, it copies so that a failure leaves the original buffer intact. Moves are usually cheaper, iterators are invalidated by reallocation either way, and containers move freely when it is safe."},
+        {"q": "Which statement about shared_ptr is correct?",
+         "options": ["It is the same size as a raw pointer", "Copying it is free because only a pointer is copied", "make_shared performs one allocation for the object and the control block, and copies update an atomic count", "A cycle of shared_ptrs is reclaimed automatically"],
+         "answer": 2,
+         "why": "shared_ptr is two pointers (16 bytes here), every copy is an atomic increment, and cycles leak unless one edge is a weak_ptr. make_shared co-locates object and control block in one allocation; shared_ptr(new T) needs two."},
+        {"q": "Scanning 1,024 prices stored inside 56-byte structs touches 896 cache lines. How many does a packed array of doubles touch?",
+         "options": ["64", "128", "448", "896"],
+         "answer": 1,
+         "why": "1,024 doubles x 8 bytes = 8,192 bytes = 128 lines of 64 bytes. The array of structs pulls 56 bytes per price because the cold fields come along; halving would only apply if the struct were 28 bytes."},
+    ],
+})
+
+# ═══ Week 3 · Session 3 ═══
+WEEKS.append({
+    "n": 3,
+    "title": "Session 3 · Allocators, pools and templates: pre-own the memory, then write the machinery once",
+    "topics": [
+        "what new and malloc really cost, and what the hot path needs",
+        "the fixed-size object pool with an intrusive free list",
+        "arena (bump) allocators, placement new and explicit destructor calls",
+        "std::pmr: polymorphic memory resources and a per-tick scratch buffer",
+        "function and class templates, deduction and specialisation",
+        "variadic templates, fold expressions, type traits, if constexpr and concepts",
+        "inheritance and virtual dispatch: the vptr, the vtable and their cost",
+    ],
+    "concepts": [
+        C("What new really costs on the hot path", "w3c1", """
+"Don't allocate" is the rule; this concept is about seeing how much a normal-looking <code>on_book</code>
+allocates without saying <code>new</code> anywhere (Deck U3, "What new / malloc Really Costs" and "What the
+Hot Path Actually Needs"). The snippet counts calls to the global allocator. A first-draft handler that builds a
+string key, a small depth vector, inserts into a <code>std::map</code>, makes a <code>shared_ptr</code> and
+appends to a growing vector makes 29,065 heap allocations in 10,000 ticks, 2.91 per tick. The same work with
+fixed arrays, a vector reserved at startup and no strings makes zero.
+<br><br>
+Why the count matters more than any one timing: the allocator's cost is not a constant. The same call that
+takes tens of nanoseconds on a quiet tick may walk a fragmented free list, take a lock, or fault in a fresh
+page on a busy one, and that variance is your p99.9. The last line shows a trap in the other direction: copying
+a 4-character <code>std::string</code> allocated nothing (the small-string buffer holds it inline), while a
+27-character one allocated. Whether a string allocates depends on its length, which is exactly the kind of
+invisible branch a hot path must not have.
+<br><br>
+In the lab, Step 0 "Read the contract" (<code>make pool</code>) states the target: a pool that serves orders
+with no heap call after startup. In the arena, Deck U3's "In the Arena &mdash; Pool Your Bot" asks you to find
+every hidden <code>new</code> in <code>on_book</code> and <code>on_fill</code>.
+"""),
+        C("The fixed-size object pool: O(1) alloc and free", "w3c2", """
+A pool owns one buffer of N slots, reserved before the first tick, and threads an intrusive free list through
+the slots that are not in use (Deck U3, "The Fixed-Size Object Pool" and "A Fixed-Size Pool in C++"). Each
+unused slot stores the pointer to the next free slot inside its own bytes, so the list costs no extra memory.
+<code>alloc()</code> pops the head of the list and constructs the object in place with placement new;
+<code>free()</code> runs the destructor explicitly and pushes the slot back. Both are O(1), with no system call,
+no lock and no search.
+<br><br>
+The snippet's trace is worth reading line by line. Orders a, b and c take slots 0, 1 and 2. Freeing b and
+allocating d hands back slot 1, because the free list is LIFO: the slot most recently used is the one most
+likely to still be hot in cache, a property you want. The fourth allocation takes slot 3 and the fifth returns
+<code>nullptr</code>: exhaustion is reported to the caller, who decides what to do (reject the order, or size
+the pool properly), instead of silently falling back to the heap. The whole pool is 144 bytes of storage
+reserved at startup.
+<br><br>
+In the lab this is Step 1 "One buffer, owned once" and Step 2 "<code>alloc()</code> and <code>free()</code>,
+both O(1). Get to green." The code-trace widget below replays the free list. In the arena this is the pool for
+your order structs, which Deck U3's "The Session-3 Code &mdash; Pool the Order Struct" wires in.
+"""),
+        C("Arena allocators, placement new and the explicit destructor", "w3c3", """
+When objects share a lifetime, don't free them one by one: free them all at once (Deck U3, "Arena / Bump
+Allocator &amp; Placement new"). An arena is a buffer and an offset. Allocation rounds the offset up to the
+requested alignment and adds the size; reset sets the offset back to zero. The snippet allocates a 3-byte tag at
+offset 0, a 16-byte, 8-aligned <code>Msg</code> at offset 8 (five bytes of padding to reach alignment), and a
+64-byte block aligned to 64 at offset 64, a cache line of its own.
+<br><br>
+Placement new separates the two jobs <code>new</code> normally does: the arena provides the storage, and
+<code>new (raw) Msg(7, 100.02)</code> only runs the constructor there. The matching half is an explicit
+destructor call, <code>m-&gt;~Msg()</code>, which runs the destructor without releasing storage; the live count
+returns to zero, then a single reset frees everything. For trivially destructible types, the snippet's
+per-tick loop shows the pattern you want in a trading loop: 1,000 ticks of scratch objects, a high-water mark of
+320 of 1,024 bytes, and not one heap call.
+<br><br>
+The rules that keep this safe: the alignment must be a power of two, every non-trivial object must be
+destroyed before the reset, and nothing may keep a pointer into the arena past the reset. In the lab this is
+Step 3 "Placement <code>new</code> + explicit destructor".
+""", r"\text{offset}' = \big(\text{offset} + a - 1\big)\ \&\ \sim(a - 1),\quad a = 2^k"),
+        C("std::pmr: the standard version of all this", "w3c4", """
+C++17's polymorphic memory resources let a standard container use your allocation strategy without changing
+its type (Deck U3, "std::pmr &mdash; Polymorphic Memory Resources" and "pmr in Practice &mdash; Per-Tick
+Scratch Buffer"). A <code>std::pmr::vector&lt;long&gt;</code> takes a <code>memory_resource*</code>; a
+<code>monotonic_buffer_resource</code> over a buffer you own is an arena, and an upstream resource says what
+happens when the buffer runs out.
+<br><br>
+The snippet wraps new/delete in a counting resource to make the fallback visible. Driving a per-tick vector
+and a long string straight from the heap costs 2,000 upstream allocations over 1,000 ticks. Building a fresh
+monotonic resource over a 4 KB static buffer each tick costs zero: the resource bump-allocates inside the buffer
+and its destructor releases everything at once. Shrink the buffer to 128 bytes and it overflows, reaching the
+heap four times for 3,968 bytes over ten ticks. With <code>null_memory_resource()</code> upstream, overflow
+throws <code>bad_alloc</code> instead: in a trading system that is often the right choice, because a loud
+failure in testing beats a silent heap call in production.
+<br><br>
+The trade-off: every pmr allocation goes through a virtual call on the resource, which is cheap next to a heap
+allocation but not free, so pmr is the tool for scratch containers, not for the tightest loop. In the lab this
+is the pmr reading attached to HW 3; in the arena it is the per-tick working set of your bot.
+"""),
+        C("Templates, folds and if constexpr against virtual dispatch", "w3c5", """
+A template is a recipe the compiler stamps out per type, so generic code costs nothing at run time (Deck U3,
+"Function &amp; Class Templates", "Variadic Templates &amp; Parameter Packs", "Fold Expressions (C++17)" and "if
+constexpr &amp; C++20 Concepts"). The snippet's field writer is one variadic template: <code>(put(b, f),
+...)</code> is a fold over the comma operator that calls <code>put</code> once per argument, and inside it
+<code>if constexpr</code> picks the encoding for a <code>char</code>, an integer or a C string at compile time.
+Five fields become <code>B|10002|300|AAPL|7|</code>, and a type with no encoding fails the build through
+<code>static_assert</code> instead of failing at run time.
+<br><br>
+The comparison is virtual dispatch (Deck U3, "How It Works &mdash; the vptr and the vtable" and "What Virtual
+Costs on the Hot Path"). <code>Momentum</code> derives from an abstract <code>Strategy</code> and is 16 bytes,
+because every object carries a vptr; the equivalent plain struct is 8. Both return the same signal, but the
+virtual call loads the vptr, loads the function pointer and makes an indirect call the compiler cannot inline,
+while the template call is resolved and usually inlined at compile time. That is Deck U3's punchline,
+"Zero-Overhead &mdash; Templates vs Virtual Dispatch".
+<br><br>
+In the lab this is Step 5 "the fold" and Step 6 "<code>if constexpr</code>, and regression check", assigned
+at home. In the arena it is the generic codec field writer of Deck U3's session-3 code.
+"""),
+    ],
+    "widget": {
+        "type": "code-trace",
+        "title": "The object pool's free list, step by step",
+        "params": {
+            "lang": "cpp",
+            "code": "Pool<Order, 4> pool;          // free: 0 -> 1 -> 2 -> 3\nOrder* a = pool.alloc(...);   // pop slot 0\nOrder* b = pool.alloc(...);   // pop slot 1\nOrder* c = pool.alloc(...);   // pop slot 2\npool.free(b);                 // ~Order(); push slot 1\nOrder* d = pool.alloc(...);   // pop slot 1 again (LIFO)\nOrder* e = pool.alloc(...);   // pop slot 3\nOrder* f = pool.alloc(...);   // list empty -> nullptr",
+            "steps": [
+                {"line": 1, "state": {"free list": "0 -> 1 -> 2 -> 3", "live": "0"}, "note": "All four slots are reserved at startup; no heap call will follow."},
+                {"line": 2, "state": {"free list": "1 -> 2 -> 3", "live": "1", "a": "slot 0"}},
+                {"line": 3, "state": {"free list": "2 -> 3", "live": "2", "b": "slot 1"}},
+                {"line": 4, "state": {"free list": "3", "live": "3", "c": "slot 2"}},
+                {"line": 5, "state": {"free list": "1 -> 3", "live": "2"}, "note": "Explicit destructor, then the slot's own bytes store the next pointer."},
+                {"line": 6, "state": {"free list": "3", "live": "3", "d": "slot 1"}, "note": "LIFO reuse: the slot b just warmed is still in cache."},
+                {"line": 7, "state": {"free list": "(empty)", "live": "4", "e": "slot 3"}},
+                {"line": 8, "state": {"free list": "(empty)", "live": "4", "f": "nullptr"}, "note": "Exhaustion is reported; the pool never falls back to the heap."},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Calling delete on an object built with placement new: the storage belongs to the pool or arena, so run the destructor explicitly and return the slot.",
+        "Resetting an arena while objects with non-trivial destructors are still alive in it: their destructors never run and whatever they own leaks.",
+        "Rounding an offset to an alignment that is not a power of two: the mask trick only works for 2^k.",
+        "Treating std::string as allocation-free because short test strings were: the small-string buffer hides the heap until a longer value arrives.",
+    ],
+    "check": [
+        {"q": "Why is a pool's free list usually LIFO?",
+         "options": ["It is the only order a singly linked list supports", "The most recently freed slot is the one most likely to still be in cache", "FIFO order would make alloc O(n)", "LIFO order prevents double frees"],
+         "answer": 1,
+         "why": "Handing back the slot just freed reuses a warm cache line. A FIFO list is also O(1) with a tail pointer, so complexity is not the reason, and LIFO order does nothing to detect a double free."},
+        {"q": "An arena's offset is 3 and the next request is 16 bytes aligned to 8. Where does the object start?",
+         "options": ["3", "8", "16", "19"],
+         "answer": 1,
+         "why": "(3 + 7) & ~7 = 8: round up to the next multiple of the alignment. 3 is misaligned, 16 over-rounds (that would be the answer for alignment 16), and 19 is the end of an object placed at 3."},
+        {"q": "A monotonic_buffer_resource over a 64-byte buffer has null_memory_resource() upstream, and a container asks for 256 bytes. What happens?",
+         "options": ["The request silently goes to the heap", "The buffer grows automatically", "bad_alloc is thrown", "The container truncates to 64 bytes"],
+         "answer": 2,
+         "why": "The null resource refuses every request by throwing bad_alloc, which is exactly why you choose it: overflow fails loudly instead of touching the heap. A monotonic resource never grows a buffer it does not own, and containers never truncate silently."},
+        {"q": "What does if constexpr buy inside a template, compared with an ordinary if?",
+         "options": ["The branch is evaluated faster at run time", "The discarded branch is not instantiated, so it may contain code that would not compile for this type", "It makes the function a coroutine", "It forces the function to be inlined"],
+         "answer": 1,
+         "why": "With if constexpr the condition is a compile-time constant and the discarded branch is not instantiated for that type, so one template can call snprintf for integers and memcpy for strings. An ordinary if with a constant condition is usually optimised away too, but both branches must still compile. Inlining is a separate decision."},
+    ],
+})
+
+# ═══ Week 4 · Session 4 ═══
+WEEKS.append({
+    "n": 4,
+    "title": "Session 4 · Compile-time dispatch and the order book: move decisions out of the tick, then flatten the book",
+    "topics": [
+        "constexpr, consteval and static_assert; compile-time lookup tables",
+        "type traits, tag dispatch and if constexpr",
+        "CRTP and policy-based design: polymorphism without the vtable",
+        "std::variant and std::visit for message dispatch",
+        "hash tables: chaining versus open addressing, and the load factor",
+        "the flat, price-indexed book level and the band it really is",
+        "FIFO per price level and knowing your queue position",
+        "the midterm review map",
+    ],
+    "concepts": [
+        C("constexpr: make the compiler do the work", "w4c1", """
+Anything the compiler can compute should not be computed during the race (Deck U4, "constexpr, consteval
+&amp; static_assert" and "Compile-Time Lookup Tables"). The snippet uses fixed-point prices with four implied
+decimals, the representation binary market-data feeds use. A <code>constexpr</code> function builds the
+powers-of-ten table, another parses "100.045" into 1000450, a <code>consteval</code> function (which may only
+run at compile time) sizes a &plusmn;5% band around 100.00 at one cent as 1,001 slots, and a lambda fills an
+8-entry fee table.
+<br><br>
+The <code>static_assert</code> lines are the point. If <code>parse_px("99.5")</code> did not equal 995000 the
+program would not compile; the tests run inside the compiler and cost nothing at run time. Every value printed
+from <code>main</code> except the last is a constant baked into the binary. The last line calls the same
+<code>parse_px</code> on a string the optimiser cannot see through and gets 1855000 for "185.5": one function,
+two execution times, and the compile-time uses are guaranteed to agree with the run-time one.
+<br><br>
+In the lab this is the reading behind Step 1 "read the contract": the book's band size and tick are
+compile-time constants of the contract. In the arena it is how you should hold anything fixed for a session,
+such as the tick size, the fee schedule and the band width: as constants the compiler folds into the code.
+""", r"\text{px}_{\text{fixed}} = \text{whole}\cdot 10^4 + \text{frac}\cdot 10^{4-d}"),
+        C("Static dispatch: std::variant, std::visit and CRTP", "w4c2", """
+The arena's protocol is a discriminated union keyed on a <code>type</code> field (Deck U4, "In the Arena
+&mdash; Compile-Time Dispatch on the Wire"). In C++ the same idea is <code>std::variant</code>: the tag is
+stored once, and <code>std::visit</code> with an overload set jumps straight to the handler for the active
+alternative. There is no inheritance, no heap object per message and no virtual call. The snippet feeds a
+six-message tape (two snapshots, an ack, a heartbeat, two fills) through a visitor: books=2, fills=2,
+position 150, and the ack's queue_ahead printed as it passes.
+<br><br>
+The bot itself uses CRTP, the curiously recurring template pattern (Deck U4, "CRTP &mdash; Polymorphism
+Without the vtable" and "Policy-Based Design (Alexandrescu)"). <code>BotBase&lt;MyBot&gt;</code> calls
+<code>static_cast&lt;Derived*&gt;(this)-&gt;on_book(...)</code>, which the compiler resolves and can inline.
+The printed sizes make the cost explicit: the variant is 32 bytes (the largest alternative, a 24-byte fill, plus
+the tag rounded up), and <code>MyBot</code> has no vptr. Swap in a different policy class and you get a
+different, equally fast bot, chosen at compile time.
+<br><br>
+In the lab this is Step 0, the visitor, live, from week 6's step 5. In the arena it is Deck U4's session-4 code,
+"Compile-Time Message Dispatch", applied to every frame your client decodes.
+"""),
+        C("Open addressing: a symbol map in one flat array", "w4c3", """
+A hash table is O(1) only if you respect the cache (Deck U4, "Hash Tables &mdash; O(1) Lookup, If You
+Respect the Cache" and "A Cache-Friendly Open-Addressing Probe"). <code>std::unordered_map</code> uses
+chaining: each key lives in its own heap node, so a lookup is a hash, a bucket load and at least one pointer
+chase to a cold line. Open addressing keeps every key inline in one flat array; on a collision it probes the
+next slot, which is usually on the same or the adjacent cache line.
+<br><br>
+The snippet is the lab's <code>SymMap</code>: FNV-1a hashing, linear probing, a power-of-two capacity so the
+index is a mask. It inserts symbols and then counts the probes needed to look every key up. At load factor 0.24
+the average is 1.16 probes and the worst 4; at 0.49, 1.36 and 8; at 0.68, 1.60 and 25; at 0.88, 2.94 and 73; at
+0.98 the average is 6.48 and one unlucky key needs 336. The average degrades gently and the <em>maximum</em>
+explodes, which is the tail you would feel.
+<br><br>
+The practical rule is to size the table at startup to stay under about 0.5 to 0.7 and never let it grow on the
+hot path. In the lab this is Step 4 "<code>SymMap</code>, and the numbers". In the arena, symbols are known at
+session open, so the map can be built once and then only read.
+""", r"\mathbb{E}[\text{probes}_{\text{hit}}] \approx \tfrac12\left(1 + \frac{1}{1-\alpha}\right),\quad \alpha = n/\text{cap}"),
+        C("The flat, price-indexed book and the band it really is", "w4c4", """
+Prices sit on a discrete tick grid, so a book side can be an array indexed by arithmetic: slot = tick &minus;
+base_tick (Deck U4, "Representing the Book &mdash; Flat Array vs Tree", "A Flat, Price-Indexed Book Level" and
+"Add, Cancel &amp; Match on the Flat Book"). Adding liquidity is one store. The best price is a cached index,
+so reading the touch is one load with no traversal. The snippet's band is &plusmn;5% around 100.00 at one cent,
+1,001 slots of 8 bytes: 8,008 bytes, 125 cache lines, small enough to stay resident.
+<br><br>
+The cost moves to cancels. When the touch empties, the side scans toward worse prices for the next non-empty
+slot: the first cancel scans 1 slot, the second 11 more (12 in total) because the next bid is ten cents away.
+That scan is bounded by the band and runs over contiguous memory, which is exactly the access pattern the
+prefetcher handles well, whereas a tree would pay a pointer chase per level on every operation. An order
+outside the band (106.00) is rejected rather than triggering a resize; the band is a design decision you state
+up front, mirroring the venue's own price bands.
+<br><br>
+In the lab this is Step 2 "the banded book" and Step 3 "<code>cancel</code>, including the scan". In the arena
+it is Deck U4's "In the Arena &mdash; Mirror the Exchange": keep a local copy of the venue's book in this shape.
+"""),
+        C("FIFO per level, and knowing your place in it", "w4c5", """
+The engine keys each price level on arrival order, so your standing is a quantity you can compute:
+queue_ahead, the shares resting in front of you (Deck U4, "FIFO Per Price Level &mdash; and Your Position in
+It"). The arena's acknowledgement and queue-update messages carry it, and queue_ahead = 0 means you are next.
+The snippet joins a level behind 800 shares. A 600-share trade eats from the front and leaves 200 ahead; a
+cancel by the order in front of you takes you to 0.
+<br><br>
+Then comes the expensive mistake. The bot "requotes" at the same price, a cancel plus a new order, and lands at
+the back with 400 ahead. The next aggressive sell of 300 fills the order that was behind it; the bot fills 0 of
+its 200, where staying put would have filled all 200. That is why a good market maker only requotes when the
+expected gain beats the queue position it gives up, and why session 9 returns to queue-aware requoting.
+<br><br>
+The deque here is the teaching version; the lab's book keeps per-level FIFO state inside the flat
+structure so a cancel does not walk a linked list across the heap. In the lab this closes Step 3 and feeds
+HW 4. In the arena the queue fields on every ack are the data this concept turns into a decision, and the
+session also includes the ten-minute midterm review map.
+"""),
+    ],
+    "widget": {
+        "type": "tree-diagram",
+        "title": "Compile-time dispatch on the wire: one frame, one tag check, one inlined handler",
+        "params": {
+            "nodes": [
+                {"id": "frame", "label": "WebSocket frame (JSON)"},
+                {"id": "tag", "label": "read \"type\" once"},
+                {"id": "snap", "label": "BookSnapshot"},
+                {"id": "ack", "label": "OrderAck"},
+                {"id": "fill", "label": "Fill"},
+                {"id": "hb", "label": "Heartbeat"},
+                {"id": "visit", "label": "std::visit + overloaded{}"},
+                {"id": "onbook", "label": "Derived::on_book (CRTP, inlined)"},
+                {"id": "queue", "label": "queue_ahead -> requote policy"},
+                {"id": "onfill", "label": "Derived::on_fill"},
+                {"id": "book", "label": "flat banded book: slot = tick - base"},
+            ],
+            "edges": [
+                {"from": "frame", "to": "tag"}, {"from": "tag", "to": "snap"}, {"from": "tag", "to": "ack"},
+                {"from": "tag", "to": "fill"}, {"from": "tag", "to": "hb"},
+                {"from": "snap", "to": "visit"}, {"from": "ack", "to": "visit"}, {"from": "fill", "to": "visit"},
+                {"from": "hb", "to": "visit"},
+                {"from": "visit", "to": "onbook"}, {"from": "visit", "to": "queue"}, {"from": "visit", "to": "onfill"},
+                {"from": "onbook", "to": "book"},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Letting an open-addressing table fill up: the average probe count looks fine at 0.9 while the worst lookup is dozens of slots long.",
+        "Resizing the flat book on the hot path when a price leaves the band; decide the band at startup and reject or re-centre off the path.",
+        "Cancel-and-repost at the same price to 'refresh' a quote: it resets your queue position to the back.",
+        "Believing constexpr guarantees compile-time evaluation: only a constant-expression context (a constexpr variable, static_assert, consteval) forces it.",
+    ],
+    "check": [
+        {"q": "What does consteval add over constexpr for a function?",
+         "options": ["Nothing; they are synonyms", "The function must be evaluated at compile time; a run-time call is an error", "The function is evaluated lazily", "The function can allocate at run time"],
+         "answer": 1,
+         "why": "A consteval function is an immediate function: every call must produce a constant, so a call with run-time arguments fails to compile. A constexpr function may run at either time, as parse_px does in the snippet. Neither makes evaluation lazy."},
+        {"q": "Your flat bid side has its best at slot 502 and the next non-empty slot is 490. The best level is fully cancelled. How many slots does the scan inspect before finding the new best?",
+         "options": ["1", "12", "490", "1001"],
+         "answer": 1,
+         "why": "It walks from 502 down through 501 ... 491, 12 slots, which are all contiguous and prefetch well. It does not rescan the whole band, and the cached best index is what makes the common case one load."},
+        {"q": "You rest 200 shares with 400 ahead of you at a level. A trader cancels 150 of the 400, then a 300-share market sell arrives. How many of yours fill?",
+         "options": ["0", "50", "200", "300"],
+         "answer": 1,
+         "why": "After the cancel 250 are ahead; the 300-share sell takes those 250 first and the remaining 50 fill against you. Price-time priority fills strictly in queue order, so neither 0 nor your full 200 is right, and 300 ignores the queue entirely."},
+        {"q": "Why can a variant plus visit replace a virtual on_message hierarchy with no loss of flexibility for a closed set of message types?",
+         "options": ["variant stores every alternative at once", "visit dispatches on the stored index with the handler set known at compile time, so no heap object or vtable is needed", "variant uses RTTI to find the type", "visit only works with inheritance"],
+         "answer": 1,
+         "why": "A variant holds one alternative plus an index; visit uses the index to call the right overload, typically through a jump table the compiler generates. Because the set of types is closed and known, no base class, heap allocation or vtable is required. It does not use RTTI."},
+    ],
+})
+
+# ═══ Week 5 · Session 5 ═══
+WEEKS.append({
+    "n": 5,
+    "title": "Session 5 · Midterm, then complexity, the cache and atomics: count misses, update instead of recompute, and publish safely",
+    "topics": [
+        "MIDTERM in session: remote, closed-book, 30 questions in 90 minutes",
+        "Big-O, amortized cost and the real machine",
+        "ring buffers and rolling windows",
+        "update, don't recompute: online mean, variance (Welford) and EMA",
+        "std::thread, data races and why a race is undefined behaviour",
+        "happens-before, std::atomic and memory_order",
+        "acquire/release publication, and why a lock on the hot path is a tail bomb",
+        "mini-lab: reproduce a race, let ThreadSanitizer name it, fix it properly",
+    ],
+    "concepts": [
+        C("Big-O hides the constant, and the constant is your grade", "w5c1", """
+Big-O counts operations as n grows; the machine charges for cache lines at the n you actually have (Deck U5,
+"Big-O, Amortized, and the Real Machine" and "Optimization Techniques That Move p99.9"). The snippet finds a
+price level three ways and counts both comparisons and lines, then applies a stated cost model: 1 ns per
+comparison, 100 ns per cold line, 5 ns for each further sequential line because the prefetcher hides it.
+<br><br>
+For 16 levels, the depth a strategy usually reads, a linear scan does 5 comparisons in 1 line, binary search 4
+in 1, and a <code>std::map</code> 4 comparisons but 4 lines, since every node is its own heap allocation:
+105, 104 and 404 modelled ns. The tree's O(log n) is real and still four times slower. At 1,000 levels with the
+target near the front, the linear scan's 251 comparisons over 32 prefetched lines model at 506 ns against 809
+for binary search and 909 for the tree: the "worse" algorithm wins because its memory access is sequential.
+<br><br>
+The lesson is not "always scan": it is to count the misses before choosing. Books are shallow where the action
+is, the touch is near the front, and contiguous memory is cheap to walk. In the arena this is why the flat
+book of session 4 beats a map even though both are "fast enough" on paper; in the midterm, expect to be asked
+which structure wins at a stated n and why.
+""", r"T \approx c_{\text{cmp}}\cdot\#\text{cmp} + c_{\text{miss}}\cdot\#\text{cold lines} + c_{\text{seq}}\cdot\#\text{prefetched lines}"),
+        C("Amortized is not worst case", "w5c2", """
+<code>push_back</code> is amortized O(1): averaged over many calls the cost per call is constant (Deck U5,
+"Big-O, Amortized, and the Real Machine"). The snippet counts the element copies each call triggers. 100,000
+pushes cause 18 reallocations and 131,071 copies in total, 1.31 copies per push on average, which is the
+amortized story. But push #65,536 alone copies 65,536 elements: the capacity doubles (libc++ grows by a factor
+of two here, ending at 131,072 for 100,000 elements), and on that one call every existing element moves.
+<br><br>
+A trading loop does not experience the average. It experiences each tick, and the tick that triggers a
+reallocation is a latency spike proportional to the container's size, arriving at a moment you do not choose,
+usually when the container is busiest. That single call is a p99.9 event. With <code>reserve(100000)</code> at
+startup the same loop reallocates zero times and every push costs the same.
+<br><br>
+The same reasoning applies to any structure with amortized guarantees: hash tables that rehash, string
+builders, and garbage collectors in other languages. Pay the growth once, off the hot path, and cap the size.
+In the arena this is the order and fill history your bot keeps: reserve it at session open. The midterm
+routinely asks for the difference between amortized and worst-case cost with a container like this one.
+""", r"\text{amortized} = \frac{\sum_i c_i}{n} = O(1),\qquad \max_i c_i = \Theta(n)"),
+        C("Ring buffers and update-don't-recompute", "w5c3", """
+A rolling window is a ring buffer: fixed capacity, a head index, and the oldest element overwritten by the
+newest (Deck U5, "The Ring Buffer &mdash; Fixed-Capacity History" and "Sliding &amp; Rolling Windows"). With a
+power-of-two capacity the index is a mask. Its statistics should be <em>updated</em> per tick, not recomputed:
+add the new value, subtract the one leaving (Deck U5, "Online Variance &amp; EMA in C++").
+<br><br>
+The snippet runs 100,000 ticks of a synthetic price with a 64-tick window. The incremental and recomputed
+means agree to 3.8e-11 while the incremental version does 200,000 operations against 6,397,984: 32 times less
+work, and more importantly a constant cost per tick instead of a cost proportional to the window. The EMA is a
+single multiply-add. The variance line shows the other half of the story: the textbook sum-of-squares formula
+subtracts two large, nearly equal numbers at a price near 10,000 and loses precision (relative error 1.6e-6
+here, and far worse in single precision or at higher prices), while Welford's update stays accurate.
+<br><br>
+The small 3.8e-11 drift is itself a warning: a running sum that adds and subtracts accumulates rounding, so
+long-lived windows re-anchor periodically off the hot path. In the arena this is Deck U5's session-5 code, "An
+O(1) Signal on <code>on_book</code>": the microprice and imbalance are handed to you free, and anything you add
+on top should cost O(1) per tick.
+""", r"\bar x_k = \bar x_{k-1} + \frac{x_k - \bar x_{k-1}}{k},\quad M_k = M_{k-1} + (x_k - \bar x_{k-1})(x_k - \bar x_k)"),
+        C("A data race is undefined behaviour, and volatile does not fix it", "w5c4", """
+<code>counter++</code> on a plain integer is three steps: load, add, store. Two threads interleaving those
+steps can both load the same old value and both store old+1, losing an update, and the C++ standard goes
+further: an unsynchronised write racing with another access is undefined behaviour (Deck U5, "std::thread
+&mdash; Two Instruction Streams" and "Data Races Are Undefined Behavior"). The snippet proves the loss
+without running a thread: it enumerates every interleaving of two single increments. Of the 20 possible
+schedules, only 2 (one thread entirely before the other) give 2; 18 lose an update.
+<br><br>
+The fix is an atomic read-modify-write: <code>fetch_add</code> is indivisible, so the result no longer depends
+on the schedule, and two real threads doing a million increments each print 2,000,000 on every run.
+<code>memory_order_relaxed</code> is enough for a pure counter because nothing else is published through it.
+<code>volatile</code> is the wrong fix: it stops the compiler caching the variable, but it makes nothing
+atomic and orders nothing between threads.
+<br><br>
+This is the whole mini-lab: Step 1 "reproduce the race", Step 2 "let the tool name it" with ThreadSanitizer,
+Step 3 "the wrong fix", changing the declaration to <code>volatile</code> and watching TSan still complain,
+and Step 4 "fix it properly" with <code>std::atomic&lt;long&gt;</code> and a relaxed <code>fetch_add</code>.
+""", r"\#\text{interleavings} = \binom{6}{3} = 20"),
+        C("Acquire/release: publishing data without a lock", "w5c5", """
+Happens-before is the only rule that matters (Deck U5, "Happens-Before &mdash; the Only Rule That Matters"
+and "Acquire / Release &mdash; Publishing Data Safely"). If thread A writes a payload with plain stores and
+then stores a flag with <code>memory_order_release</code>, and thread B loads the flag with
+<code>memory_order_acquire</code> and sees it set, then every write A made before the release is visible to B
+after the acquire. Neither the compiler nor the CPU may move the payload writes below the release or the reads
+above the acquire.
+<br><br>
+The snippet is Deck U5's "A Lock-Free Handoff": one slot passed back and forth 200,000 times between a
+producer and a consumer through a single atomic flag. The consumer checks every read for a torn or stale touch
+(wrong sequence number, or an ask not two ticks above the bid) and finds 0; the checksum is the same on every run.
+The flag is <code>alignas(64)</code> and starts its own cache line (the snippet prints the address modulo 64 as
+0), so the spinning reader does not fight the writer over the payload's line.
+<br><br>
+Why not a mutex? A lock is correct, but on the hot path it is a tail bomb (Deck U5, "Why a Lock on the Hot Path
+Is a Tail Bomb"): the uncontended case is fast, and the contended case can put your thread to sleep behind a
+holder that was itself preempted, turning nanoseconds into scheduler quanta. In the arena this handoff is the
+seed of session 6's SPSC ring between the socket thread and your strategy.
+"""),
+    ],
+    "widget": {
+        "type": "timeline",
+        "title": "Session 5 run of show: the midterm, then a compressed lecture and a 25-minute race-condition mini-lab (minutes from the start)",
+        "params": {
+            "events": [
+                {"t": 0, "label": "Logistics and exam brief", "note": "No deck: remote-exam checklist, access code."},
+                {"t": 10, "label": "MIDTERM starts", "note": "Remote, closed-book, 30 questions in 90 minutes."},
+                {"t": 100, "label": "Break and reset", "note": "Ten minutes."},
+                {"t": 110, "label": "Compressed lecture", "note": "Complexity in cache terms, rolling windows, threads, atomics, acquire/release."},
+                {"t": 150, "label": "Mini-lab Step 1: reproduce the race", "note": "A plain long counter, two threads."},
+                {"t": 157, "label": "Step 2: let the tool name it", "note": "Same source, ThreadSanitizer flags."},
+                {"t": 165, "label": "Step 3: the wrong fix", "note": "volatile: TSan still reports the race."},
+                {"t": 168, "label": "Step 4: fix it properly", "note": "std::atomic<long> with fetch_add(relaxed)."},
+                {"t": 175, "label": "Close", "note": "Project phase 1 due tonight; HW 5 in ten days."},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Reading 'amortized O(1)' as 'every call is cheap': the reallocating call copies the whole container, and it lands on your busiest tick.",
+        "Using volatile for inter-thread communication: it neither makes an operation atomic nor orders memory between threads.",
+        "Publishing a payload with a relaxed flag store: the reader may see the flag before the data. Pair a release store with an acquire load.",
+        "Keeping a running window sum forever: add-and-subtract accumulates rounding; re-anchor it periodically off the hot path.",
+    ],
+    "check": [
+        {"q": "Two threads each execute one plain counter++ on a shared int starting at 0. Which final values are possible under the model the snippet enumerates?",
+         "options": ["Only 2", "Only 1", "1 or 2", "0, 1 or 2"],
+         "answer": 2,
+         "why": "If both threads load before either stores, both store 1; if one completes before the other loads, the result is 2. It cannot be 0 because at least one store of 1 happens. (Formally the race is undefined behaviour, which is why the real fix is an atomic, not an argument about outcomes.)"},
+        {"q": "A vector of 65,536 longs is full and you push_back once more. Roughly how many element copies or moves does that call perform with a doubling growth policy?",
+         "options": ["1", "about 16 (log2 of the size)", "65,536", "131,072"],
+         "answer": 2,
+         "why": "The vector allocates a buffer of 131,072 and moves the 65,536 existing elements, then constructs the new one. The amortized cost is about 1.3 per push, but this call alone is Theta(n). 131,072 is the new capacity, not the number moved."},
+        {"q": "Thread A writes data, then flag.store(1, release). Thread B does while(!flag.load(acquire)); then reads data. What is guaranteed?",
+         "options": ["Nothing, because data is not atomic", "B sees every write A made before the release", "B sees data only if data is volatile", "The guarantee needs memory_order_seq_cst on both sides"],
+         "answer": 1,
+         "why": "Release/acquire synchronisation creates happens-before from A's writes before the store to B's reads after the load, so plain data written before the release is visible. volatile is irrelevant, and seq_cst is stronger than needed for this one-way publication."},
+        {"q": "For 16 price levels, which structure models fastest under the snippet's cost model, and why?",
+         "options": ["std::map, because it is O(log n)", "Linear scan or binary search on a contiguous array, because both touch one cache line", "A hash table, because it is O(1)", "std::list, because insertion is O(1)"],
+         "answer": 1,
+         "why": "Sixteen 8-byte ticks fit in two lines, and the target near the front sits in the first, so both array searches cost about one cold line; the map pays a cold line per node visited. Big-O ranks these by comparisons and misses the dominant term. A list is the worst case for the cache."},
+    ],
+})
+
+# ═══ Week 6 · Session 6 ═══
+WEEKS.append({
+    "n": 6,
+    "title": "Session 6 · Lock-free pipelines and shared memory: one writer, one reader, a bounded ring",
+    "topics": [
+        "midterm debrief",
+        "compare-and-swap, the atom of lock-free programming",
+        "the ABA problem and progress guarantees (lock-free, wait-free)",
+        "the SPSC ring buffer, and why alignas(64) is not decoration",
+        "back-pressure, bounded queues and head-of-line blocking",
+        "across processes: the shared-memory ring and the seqlock",
+        "C++20 coordination: latch, barrier, counting_semaphore; parallel algorithms",
+        "Lab: build and test the SPSC ring, then run it under ThreadSanitizer",
+    ],
+    "concepts": [
+        C("Compare-and-swap, and how ABA fools it", "w6c1", """
+Compare-and-swap writes a new value only if the location still holds the value you read; if not, it fails and
+you retry with the fresh value (Deck U6, "Compare-and-Swap &mdash; the Atom of Lock-Free"). Every lock-free
+structure is built from CAS loops. The snippet's last line is one: raising a shared high-water mark with
+<code>compare_exchange_weak</code>, retrying only when another thread changed the value in between (in a single
+thread, never).
+<br><br>
+The first two lines replay the ABA problem deterministically on a lock-free stack (Deck U6, "The ABA Problem
+&amp; Progress Guarantees"). Thread 1 reads top = A and A's next = B, then is preempted. Thread 2 pops A, pops
+B, and pushes A back. Thread 1 resumes and its CAS compares top against A, sees A, and succeeds, installing B as
+the new top even though B was already popped: the stack is corrupt. The value came back, but it is not the same
+state. With a tagged head (a version counter bumped on every change, compared together with the pointer) the
+CAS fails, thread 1 retries, and top correctly remains A.
+<br><br>
+Lock-free is a progress guarantee: some thread always makes progress, even if others are suspended. It is not
+a speed guarantee, and it is subtle, which is why this course's pipeline uses the simplest lock-free structure
+there is, the single-producer single-consumer ring, where no CAS is needed at all. In the lab, Step 0 "read the
+contract, together" starts from exactly that constraint.
+"""),
+        C("The SPSC ring: two indices, two cache lines", "w6c2", """
+With exactly one producer and one consumer, a bounded ring needs no CAS and no lock (Deck U6, "The SPSC Ring
+Buffer &mdash; One Writer, One Reader" and "A Minimal SPSC Ring Buffer"). The producer alone writes
+<code>head_</code>, the consumer alone writes <code>tail_</code>. To push, the producer checks the ring is not
+full (head &minus; tail &lt; N, reading tail with acquire), writes the slot, then publishes with a release store
+of head + 1. To pop, the consumer mirrors it. The indices grow forever and the slot is <code>index &amp;
+(N &minus; 1)</code>, so full and empty are never ambiguous.
+<br><br>
+The snippet runs it for real: a producer thread pushes 1,000,000 ticks through a 1,024-slot ring to the main
+thread, which checks sequence order and a spread checksum. It prints 0 out of order and checksum 2,000,000 on
+every run, because the result depends only on correctness, not on the schedule. The last line shows the layout
+detail that makes it fast: <code>head_</code> at byte 0 and <code>tail_</code> at byte 64. Without the two
+<code>alignas(64)</code> they would share a line, and every push and pop would invalidate the other core's copy,
+the false sharing of session 2, making the threaded version slower than a single thread.
+<br><br>
+In the lab this is Step 1 "the skeleton and the indices", Step 2 "<code>push</code> and <code>pop</code>",
+Step 3 "two threads, for real" and Step 4 "TSan, the last 10 points". The code-trace widget below steps through
+head and tail.
+""", r"\text{full} \iff h - t = N,\qquad \text{empty} \iff h = t,\qquad \text{slot} = i \,\&\, (N-1)"),
+        C("Bounded is a feature: back-pressure and conflation", "w6c3", """
+A bounded queue forces a decision when the producer outruns the consumer (Deck U6, "Back-Pressure, Bounded
+Queues &amp; Head-of-Line"). The snippet is a deterministic model of your client: every 100 steps a burst of 60
+book updates for 4 symbols hits the socket, the strategy handles one message per step, and the queue holds 16.
+"Stale" counts messages that were already superseded by a newer update for the same symbol when the strategy
+reached them: wasted work on old information.
+<br><br>
+Blocking processes all 6,000 messages, but 5,600 are stale, the reader thread stalls 4,400 times, and the
+average message is 29.5 steps old when handled (worst 59): head-of-line blocking, with the newest data stuck
+behind the oldest. Dropping the newest processes 1,600, every one of them stale, because it keeps the old data
+and throws away the fresh. Conflation, keeping one slot per symbol and overwriting it, processes 400 messages
+with 0 stale and an average age of 1.5 steps.
+<br><br>
+For market data the right policy is almost always conflation: the strategy wants the latest book, not every
+intermediate one. For orders and fills it is the opposite; they must never be dropped or merged, and the queue
+must be sized so it never fills. In the arena this is what happens when the class fires at once on a shock tick:
+a pipeline that blocks falls behind the tape exactly when it matters.
+"""),
+        C("Across processes: the shared-memory slot and the seqlock", "w6c4", """
+The same ring can cross a process boundary if it lives in a shared-memory segment (Deck U6, "Across
+Processes &mdash; the Shared-Memory Ring" and "The Shared-Memory Ring (Project Phase 4)"). Then its layout is a
+contract between two binaries: fixed-size fields, no pointers (each process maps the segment at a different
+address, so store offsets), standard layout, and atomics that are always lock-free, since a lock-based atomic
+would hide a mutex that is not shared. The snippet checks all of that with <code>static_assert</code> and puts
+one slot in exactly one 64-byte line.
+<br><br>
+For a single "latest touch" that one writer updates and many readers poll, the classic structure is a seqlock.
+The writer makes the sequence odd, writes, then makes it even; a reader loads the sequence, copies the payload,
+loads the sequence again, and retries if it was odd or changed. The snippet replays one collision step by step:
+the reader arrives mid-write (sequence 1, odd), would have seen bid 10001 with the old ask 10002, a mixture of
+two states, and retries; after the writer finishes (sequence 2) it reads bid 10001 and ask 10003 consistently.
+Readers never block the writer, which is exactly what a market-data publisher needs.
+<br><br>
+In the arena this is the session-9 pickoff: one client per venue, both writing a shared touch cache that is your
+Phase 4 shared-memory structure.
+"""),
+        C("C++20 coordination: latch, barrier, semaphore", "w6c5", """
+Not everything is a queue. C++20 adds three coordination primitives, each for one job (Deck U6, "C++20
+Coordination &mdash; Barrier, Latch, Semaphore"). A <code>std::latch</code> is a one-shot countdown: the
+snippet uses it as a start gun so four worker threads begin together. A <code>std::barrier</code> is reusable:
+all four workers compute a partial sum, arrive, and wait; the barrier's completion function runs once per
+phase on one thread and combines the partials. The three phase totals print as 47,999,055, 95,998,110 and
+143,997,165, exactly 1, 2 and 3 times the first, on every run, because the barrier makes each phase's reads
+happen after all of that phase's writes.
+<br><br>
+A <code>std::counting_semaphore</code> is a budget. The snippet uses one as a per-tick message quota, the
+arena's <code>order_quota</code>: with a budget of 6, eight attempts send 6 and refuse 2, and releasing the budget
+at the next tick lets sends resume. That is a useful discipline even single-threaded: decide what you will spend
+your six messages on before the tick, not after the venue rejects the seventh.
+<br><br>
+None of these belong inside the tick-to-trade path; they coordinate startup, phases and shutdown around it.
+Parallel algorithms (<code>std::execution</code> policies, Deck U6's "Parallel Algorithms") are the same story
+for batch work such as calibration or replay analysis. In the lab they are the closing reading; in the arena the
+quota is real, dropping to six messages per tick by the tournament.
+"""),
+    ],
+    "widget": {
+        "type": "code-trace",
+        "title": "An SPSC ring of capacity 4: head, tail and the full/empty tests",
+        "params": {
+            "lang": "cpp",
+            "code": "push(A)   // h - t = 0 < 4: write slot 0, head = 1 (release)\npush(B)   // write slot 1, head = 2\npop()     // t != h: read slot 0 -> A, tail = 1 (release)\npush(C)   // write slot 2, head = 3\npush(D)   // write slot 3, head = 4\npush(E)   // write slot 0 (4 & 3), head = 5\npush(F)   // h - t = 4 = N: FULL -> false\npop()     // read slot 1 -> B, tail = 2",
+            "steps": [
+                {"line": 1, "state": {"head": "1", "tail": "0", "slots": "[A, -, -, -]"}},
+                {"line": 2, "state": {"head": "2", "tail": "0", "slots": "[A, B, -, -]"}},
+                {"line": 3, "state": {"head": "2", "tail": "1", "slots": "[-, B, -, -]", "got": "A"}},
+                {"line": 4, "state": {"head": "3", "tail": "1", "slots": "[-, B, C, -]"}},
+                {"line": 5, "state": {"head": "4", "tail": "1", "slots": "[-, B, C, D]"}},
+                {"line": 6, "state": {"head": "5", "tail": "1", "slots": "[E, B, C, D]"}, "note": "The indices keep growing; the slot is the index masked by N - 1."},
+                {"line": 7, "state": {"head": "5", "tail": "1", "slots": "[E, B, C, D]", "push": "false"}, "note": "Full is detected without a separate counter: back-pressure, not overwrite."},
+                {"line": 8, "state": {"head": "5", "tail": "2", "slots": "[E, -, C, D]", "got": "B"}},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Putting head and tail on the same cache line: the ring still works, and runs slower than a single thread because the line ping-pongs between cores.",
+        "Using an SPSC ring with two producers: nothing in its code arbitrates concurrent writers to head, so pushes silently collide.",
+        "Blocking the market-data reader when the queue fills: the newest data waits behind stale data. Conflate book updates; size order queues so they never fill.",
+        "Storing pointers inside a shared-memory segment: each process maps it at a different address. Store offsets.",
+    ],
+    "check": [
+        {"q": "In the SPSC ring, why must the producer publish head with a release store after writing the slot?",
+         "options": ["To make the store faster", "So a consumer that acquires the new head is guaranteed to see the slot's contents", "Because head is shared by two producers", "Release stores flush the cache line to DRAM"],
+         "answer": 1,
+         "why": "Release/acquire orders the slot write before the index update as seen by the consumer, so it never reads a slot that is not yet written. There is only one producer by design, and release semantics say nothing about flushing to DRAM."},
+        {"q": "What does a tagged (versioned) head defend against in a lock-free stack?",
+         "options": ["False sharing", "The ABA problem: a CAS that succeeds because a value returned, though the state changed", "Priority inversion", "Torn 128-bit reads"],
+         "answer": 1,
+         "why": "The version increments on every change, so a head that went A -> C -> A no longer compares equal to the old (A, version) pair and the stale CAS fails. False sharing is a layout issue, priority inversion is a locking issue, and tearing is about atomic width."},
+        {"q": "A burst of 60 book updates for 4 symbols arrives and your strategy can handle only a few before the next burst. Which queue policy is right for market data?",
+         "options": ["Block the reader until there is room", "Drop the newest messages", "Conflate: keep the latest update per symbol", "Grow the queue without bound"],
+         "answer": 2,
+         "why": "The strategy needs the current book, not every intermediate state; conflation delivered 0 stale messages in the snippet. Blocking produced head-of-line blocking and 5,600 stale messages, dropping the newest kept only stale data, and an unbounded queue turns a burst into ever-growing latency."},
+        {"q": "A seqlock reader loads seq = 7. What should it do?",
+         "options": ["Read the payload: 7 is a valid version", "Retry: an odd sequence means a write is in progress", "Take the writer's lock", "Increment seq to claim the slot"],
+         "answer": 1,
+         "why": "The writer makes the sequence odd before writing and even after, so an odd value means the payload may be half-written. Readers never take a lock and never write the sequence; that is what lets the writer run unblocked."},
+    ],
+})
+
+# ═══ Week 7 · Session 7 ═══
+WEEKS.append({
+    "n": 7,
+    "title": "Session 7 · Network protocols, market data and serialization: know the bytes, then stop paying full price to read them",
+    "topics": [
+        "FIX: tag=value, BodyLength and CheckSum",
+        "binary feeds (ITCH/OUCH style) and schema formats (Protobuf, FlatBuffers)",
+        "TCP for orders, UDP multicast for data; sequencing and gap fill",
+        "framing: a socket is a byte stream, not a message stream",
+        "blocking versus non-blocking I/O; epoll, kqueue and the reactor",
+        "the cost of a general DOM parser; custom and zero-copy serialization",
+        "batching versus latency",
+        "Lab: the FIX scan loop, then a hand-rolled u64toa",
+    ],
+    "concepts": [
+        C("FIX: tag=value, the readable ancestor", "w7c1", """
+FIX is the lingua franca of order entry: a message is a sequence of <code>tag=value</code> fields separated by
+the SOH byte (0x01), opened by <code>8=</code> (the version) and <code>9=</code> (BodyLength, the byte count of
+everything after it up to the checksum), and closed by <code>10=</code>, the sum of every preceding byte modulo
+256, written as three digits (Deck U7, "FIX &mdash; Tag=Value, the Lingua Franca"). The snippet builds a
+new-order-single (35=D) for 300 AAPL at 18250 and prints it with SOH shown as <code>|</code>: BodyLength 48,
+CheckSum 045, 70 bytes on the wire. The receiver recomputes the checksum and gets 045: valid.
+<br><br>
+The parser is the lab's point. It is a scan loop over a <code>std::string_view</code>: find the
+<code>=</code>, find the next SOH, convert the tag and the value in place with <code>std::from_chars</code>,
+which does not allocate, does not consult the locale and does not throw. No field is copied into a string and
+no dictionary is built; asking for tag 44 walks the bytes once and stops.
+<br><br>
+FIX is readable and flexible, and that is its cost: variable-length text that must be scanned byte by byte.
+Fast venues pair it with binary protocols for the hot path. In the lab this is Step 1 "<code>make fix</code>
+&rarr; red. Read the contract.", Step 2 "type the scan loop together" and Step 3 "go green, read your number".
+""", r"\text{CheckSum} = \Big(\sum_{\text{bytes before } 10=} b_i\Big) \bmod 256"),
+        C("Fixed-width binary: decode is a copy, not a parse", "w7c2", """
+Binary market-data feeds put every field at a known offset with a known width (Deck U7, "Binary Feeds
+&mdash; ITCH / OUCH Style"). The snippet's add-order message is 36 bytes with no padding, checked by
+<code>static_assert</code>: a type byte, a 2-byte locate code, 8-byte timestamp and order reference, a side
+byte, 4-byte share count, an 8-byte space-padded symbol and a 4-byte price with four implied decimals.
+Integers are big-endian on the wire (network byte order), so on a little-endian machine each field is
+byte-swapped; the dump shows the type 'A' (0x41) followed by the locate 17 as <code>00 11</code>.
+<br><br>
+Decoding is one <code>memcpy</code> into the struct and a byte swap per field you use: no scanning for
+delimiters, no digit conversion, no branches on content. The same order as JSON is 122 bytes, 3.4 times larger,
+and every one of those bytes must be scanned and every number converted from text. Schema formats sit in
+between (Deck U7, "Schema Formats &mdash; Protobuf vs FlatBuffers"): Protobuf uses variable-length integers and
+must be decoded; FlatBuffers is laid out so a field can be read in place.
+<br><br>
+Two rules keep binary decoding safe: copy with <code>memcpy</code> rather than casting a pointer into the
+receive buffer (alignment and strict aliasing), and treat the layout as a versioned contract. In the arena the
+wire is JSON over WebSocket (Deck U7, "In the Arena &mdash; The Wire You Actually Speak"), which is why the next
+two concepts are about paying less for it.
+"""),
+        C("Framing, sequencing and gap fill", "w7c3", """
+A TCP socket is a byte stream, not a message stream: one <code>read()</code> may return half a message or three
+and a half (Deck U7, "Framing &mdash; Where Does a Message End?"). A framer accumulates bytes, extracts every
+complete message and keeps the partial tail for the next read. The snippet length-prefixes 1,000 messages of 6 to
+25 bytes into a 15,500-byte stream and delivers it in 818 reads of 1 to 37 bytes, cutting messages at arbitrary
+points. The framer recovers exactly 1,000 frames with a correct sequence checksum and 0 bytes left over. A
+length prefix makes the boundary explicit; delimiters (FIX's SOH, a newline) work too but must be scanned for.
+<br><br>
+Market data usually travels over UDP multicast instead (Deck U7, "TCP vs UDP Multicast for Market Data"): one
+packet reaches every subscriber at once with no retransmission, so it is fast and fair, and loss is your
+problem. Every message carries a sequence number, and the receiver checks it (Deck U7, "WebSocket, Sequencing
+&amp; Gap Fill"). The snippet's feed delivers 1, 2, 3, 5, 6, 9, 10, 10, 11: it reports a gap at 4, a gap at 7..8
+and a duplicate 10. A gap means your book is wrong until you recover, by requesting a retransmission or
+rebuilding from a snapshot; a duplicate must be ignored, or you double-count liquidity.
+<br><br>
+In the arena, the WebSocket layer does the framing for you, but the rule is the same: never act on a book you
+know is missing an update.
+"""),
+        C("What a general parser costs, and the targeted alternative", "w7c4", """
+A general-purpose JSON library builds a document object model: every key and value materialised, typed and
+stored, before you ask for the one field you need (Deck U7, "The Cost of a General DOM Parser"). The snippet
+parses the arena's 173-byte <code>book_snapshot</code> two ways and counts heap allocations. A DOM-style parse
+into a <code>std::map&lt;std::string, std::string&gt;</code> makes 11 allocations and reads every byte to get
+the bid, 182.49. A targeted scan finds <code>"bid":</code>, converts in place with <code>from_chars</code>, and
+makes 0 allocations after reading 52 bytes.
+<br><br>
+That is the lab's "Targeted Field Extract" (Deck U7's session-7 code): for the handful of message types on your
+hot path, you know the schema, so you do not need a general parser. The trade-off is brittleness: a targeted
+scan assumes the key order and formatting, so it must be tested against recorded traffic and fall back to the
+full parser when an assumption fails.
+<br><br>
+The send side is the mirror image (Deck U7, "Custom &amp; Zero-Copy Serialization"). <code>u64toa</code> writes
+digits backwards into a stack buffer and reverses them: ten lines, no format-string parsing, no locale. The
+snippet checks it against <code>snprintf</code> on six edge values, from 0 to 2^64 &minus; 1, and finds 0
+mismatches. In the lab this is Step 4 "<code>u64toa</code> in one shot"; Deck U7's "Prove It &mdash; Benchmark on
+a Replay Tape" is how you show the gain honestly.
+"""),
+        C("Non-blocking I/O, and batching versus latency", "w7c5", """
+A blocking read parks your thread until data arrives; a non-blocking socket returns immediately, and an event
+loop (epoll on Linux, kqueue on macOS, wrapped by the reactor pattern in Boost.Asio) tells one thread which of
+many sockets are ready (Deck U7, "Blocking vs Non-Blocking I/O", "epoll, kqueue &amp; the Event Loop" and "A
+Non-Blocking Read Loop"). The next decision is how often to cross into the kernel, and that is a trade-off, not
+an optimisation (Deck U7, "Batching vs Latency &mdash; the Core Trade-off").
+<br><br>
+The snippet is a stated cost model: an order is ready every 10 &micro;s, a send syscall costs 5 &micro;s plus
+0.2 &micro;s per message, and a batch flushes at B messages or after 50 &micro;s. Sending each order alone (B = 1)
+makes 20,000 syscalls and spends 104,000 &micro;s of CPU in send, with every order out in 5.2 &micro;s. Batching
+by 8 cuts that to 3,999 syscalls and 23,994 &micro;s, while the median latency rises to 36.0 &micro;s and the
+p99 to 56.0. Batching buys throughput with latency, and it is also what Nagle's algorithm does to a TCP socket
+by default, which is why latency-sensitive order sockets set <code>TCP_NODELAY</code>.
+<br><br>
+For order entry, send immediately; batch only what is not latency-critical (logs, metrics, analytics). In the
+arena this is your send path inside <code>on_book</code>: one order, one frame, out now.
+""", r"\text{syscalls} \approx \frac{n}{B},\qquad \text{added latency} \approx \frac{B-1}{2}\cdot\Delta t"),
+    ],
+    "widget": {
+        "type": "tree-diagram",
+        "title": "From the wire to on_book: where each format and transport sits",
+        "params": {
+            "nodes": [
+                {"id": "nic", "label": "NIC"},
+                {"id": "udp", "label": "UDP multicast (market data)"},
+                {"id": "tcp", "label": "TCP (order entry)"},
+                {"id": "seq", "label": "sequence check, gap fill"},
+                {"id": "frame", "label": "framing: length prefix / SOH / WebSocket"},
+                {"id": "bin", "label": "binary ITCH-style: memcpy + bswap"},
+                {"id": "fix", "label": "FIX tag=value: scan loop"},
+                {"id": "json", "label": "arena JSON: targeted field extract"},
+                {"id": "onbook", "label": "on_book / on_fill"},
+                {"id": "ser", "label": "serialise: u64toa, no printf"},
+                {"id": "send", "label": "send now (TCP_NODELAY)"},
+            ],
+            "edges": [
+                {"from": "nic", "to": "udp"}, {"from": "nic", "to": "tcp"},
+                {"from": "udp", "to": "seq"}, {"from": "tcp", "to": "frame"}, {"from": "seq", "to": "bin"},
+                {"from": "frame", "to": "fix"}, {"from": "frame", "to": "json"},
+                {"from": "bin", "to": "onbook"}, {"from": "fix", "to": "onbook"}, {"from": "json", "to": "onbook"},
+                {"from": "onbook", "to": "ser"}, {"from": "ser", "to": "send"},
+            ],
+        },
+    },
+    "pitfalls": [
+        "Assuming one read() returns one message: TCP delivers bytes, so a framer must keep partial tails between reads.",
+        "Casting a pointer into the receive buffer to a struct: misaligned access and strict-aliasing violations. memcpy into the struct instead.",
+        "Acting on a book after a sequence gap: until you recover by retransmission or snapshot, your view of liquidity is wrong.",
+        "Leaving Nagle's algorithm on an order socket: small writes are held back to be batched, adding latency you did not ask for.",
+    ],
+    "check": [
+        {"q": "What does FIX BodyLength (tag 9) count?",
+         "options": ["The whole message including the checksum", "The bytes after the BodyLength field up to, but not including, the 10= checksum field", "The number of fields", "The bytes of the header only"],
+         "answer": 1,
+         "why": "BodyLength counts from the byte after 9=...<SOH> to the SOH before 10=. It excludes the 8= and 9= fields and the checksum; it is a byte count, not a field count."},
+        {"q": "A UDP feed delivers sequence numbers 41, 42, 44. What should the handler do?",
+         "options": ["Apply 44 and carry on", "Mark the book stale, request 43 (gap fill or snapshot), and do not trade on the gap", "Drop 44 and wait for 43 forever", "Close the connection"],
+         "answer": 1,
+         "why": "A missing update means the book may be wrong. The standard recovery is to request a retransmission or rebuild from a snapshot and to stop acting on that symbol until you are consistent again. Blindly applying 44 trades on a wrong book; waiting forever never recovers."},
+        {"q": "Why is decoding a fixed-width binary message cheaper than decoding the same message as JSON?",
+         "options": ["Binary messages are compressed", "Every field is at a known offset and width, so decoding is a copy and a byte swap rather than scanning and digit conversion", "JSON requires a network round trip", "Binary decoding runs on the NIC"],
+         "answer": 1,
+         "why": "Fixed layout removes delimiter scanning, digit conversion and content-dependent branches; the snippet's order is 36 bytes against 122 as JSON. It is not compressed, and it is decoded on the CPU like anything else."},
+        {"q": "In the batching model, raising the batch size from 1 to 8 cut syscalls roughly fivefold. What did it cost?",
+         "options": ["Nothing: fewer syscalls are always better", "Median latency rose from about 5 us to about 36 us", "Messages were dropped", "Throughput fell"],
+         "answer": 1,
+         "why": "Each order waits for its batch to fill or time out, so median latency rose from 5.2 to 36.0 us and p99 to 56 us. Throughput capacity rose, since less CPU goes to syscalls, and nothing was dropped. For order entry that latency is the wrong trade."},
+    ],
+})
+
+# ═══ Week 8 · Session 8 ═══
+WEEKS.append({
+    "n": 8,
+    "title": "Session 8 · SIMD, kernel bypass and profiling the tail: more per cycle, the OS out of the way, then measure the truth",
+    "topics": [
+        "the memory wall, the TLB and prefetching",
+        "SIMD: one instruction, many lanes; auto-vectorisation",
+        "branch prediction and branchless code",
+        "syscalls, busy-polling and interrupts; kernel bypass",
+        "CPU pinning, core isolation, NUMA and huge pages",
+        "why the mean lies; perf, flame graphs and hardware counters",
+        "where the tail comes from: page faults, preemption, allocation, jitter",
+        "Lab: the compiler-flag matrix on a frozen kernel, then the tail",
+    ],
+    "concepts": [
+        C("SIMD lanes, and the checksum rule", "w8c1", """
+SIMD executes one instruction on several lanes at once: with AVX2, eight floats per add (Deck U8, "SIMD
+&mdash; One Instruction, Many Lanes"). The snippet writes the shape the auto-vectoriser wants, portably: eight
+independent accumulators over a 65,536-element array, which is exactly what an eight-lane vector register holds.
+The dependency chain drops from 65,536 serial adds to 8,192 per lane, so the pipeline has independent work
+every cycle.
+<br><br>
+The printed result is the lab's anchor. The single-chain float sum is 528.715149 and the eight-lane sum is
+528.752930: different bits, because floating-point addition is not associative and the lanes add in a different
+order. The integer version gives 53,031 both ways, because integer addition is associative. That is why a
+compiler will not vectorise a float reduction at <code>-O2</code> or <code>-O3</code> alone: reordering the sum
+changes the answer, and it needs <code>-ffast-math</code> or <code>-fassociative-math</code> to be allowed to.
+<br><br>
+In the lab this is Step 1 "the frozen kernel" and Step 2 "build the matrix": you may not edit the kernel, only
+the flags (<code>-O3 -march=native -funroll-loops</code>, then LTO and PGO), and the rule on the slide is that
+if a faster build prints a different checksum, the optimisation changed the math and does not count. Try
+<code>-ffast-math</code>, watch the checksum move, and write one line on whether you would ship it. Step 3
+"prove why" uses <code>perf stat</code> to show fewer instructions and higher instructions per cycle.
+"""),
+        C("Branches: a predictor model, and when to go branchless", "w8c2", """
+A modern core guesses every branch's direction and runs ahead speculatively; a wrong guess discards that work,
+roughly 15 to 20 cycles (Deck U2, "The Pipeline &amp; Branch Prediction", returning in Deck U8's "Flame Graphs,
+Counters &amp; Cycle Counting"). The snippet is a pure-CPU model of the simplest real predictor, a 2-bit
+saturating counter, run on the hot-path test <code>if (x &gt; 0)</code> over 100,000 values.
+<br><br>
+On random signs it mispredicts 49,926 times, 49.93%: a coin flip it cannot learn, about 749,000 cycles lost under
+the stated 15-cycle cost. Sort the same data and it mispredicts 3 times. Data that is 99% positive costs 1,001
+mispredicts, one per rare negative. The same values, in a different order, change the cost by four orders of
+magnitude. The last line computes the sum of positives three ways, branchy, with the sign bit as a mask
+(<code>x &amp; ~(x &gt;&gt; 31)</code>) and as a select, all 24,988,718: branchless code gives the same answer
+with nothing to mispredict.
+<br><br>
+The order of moves matters. First make branches predictable: partition or sort the data, and hoist rare cases
+(halts, errors, session events) out of the hot loop. Only then go branchless, and only where a counter shows the
+predictor losing, because branchless code adds dependent arithmetic and a well-predicted branch is nearly free.
+In the lab the <code>branch-misses</code> line of Step 3's <code>perf stat</code> is this snippet measured.
+"""),
+        C("Get the OS out of the way: kernel bypass as a cost model", "w8c3", """
+On the normal path a packet raises an interrupt, the kernel's network stack processes it, and your thread makes
+a syscall to copy it out (Deck U8, "Syscalls, Busy-Poll &amp; Interrupts" and "Kernel Bypass &mdash; Skip the
+Stack"). Kernel bypass (DPDK, Solarflare's OpenOnload and ef_vi, and similar) maps the network card's receive
+ring into user space: a pinned thread busy-polls it, with no interrupt, no syscall and no copy.
+<br><br>
+The snippet is a cost model, not a measurement, and every constant is stated: interrupt 2 &micro;s, syscall
+1.5 &micro;s, copy 0.4 &micro;s, a 100 ns poll loop, 150 ns of per-packet work, and interrupt coalescing that fires
+at 8 packets or 20 &micro;s. Over 12,996 packets in bursts, the kernel path takes 2,666 interrupts and 12,996
+syscalls, with a median of 18.40 &micro;s and a p99 of 35.75, dominated by coalescing and per-packet syscalls.
+The bypass path takes none, with a median of 0.35 &micro;s and a p99 of 0.75, bounded by queueing within a burst.
+<br><br>
+The price is on the last line: a busy-polling core runs at 100% even when the market is silent, and it must be
+pinned and isolated (next concept) or the scheduler will interrupt it. In the arena you cannot bypass the
+kernel, since the wire is WebSocket, but the colocation tier is the same idea bought rather than coded (Deck U8,
+"In the Arena &mdash; Code the Microseconds, Buy the Rest").
+"""),
+        C("Every tail spike has a physical cause", "w8c4", """
+A tail spike is not noise; it is a specific event you can name (Deck U8, "Where the Tail Comes From" and
+"Jitter &amp; the OS Scheduler"). The snippet builds a synthetic 200,000-tick trace with a 0.9 to 1.2
+&micro;s body and injects three stated causes on a deterministic schedule: first-touch page faults on the first
+400 ticks, scheduler preemption and core migration, and occasional allocator slow paths. Then it removes them
+one at a time, the way the lab's Step 5 "the fix" asks you to.
+<br><br>
+The baseline has a p99.9 of 13.69 &micro;s and a max of 100.08. Removing hot-path allocation takes the p99.9 to
+9.08. Pinning the thread to an isolated core removes preemption and migration: p99.9 6.05, max 6.20. Pre-faulting
+memory at startup (touching every page, or locking it) removes the last cause: p99.9 and max both 1.20. The
+median never moved from 1.05 &micro;s; every fix was invisible to the p50 and decisive for the tail. The last
+line explains huge pages: a 64 MB working set needs 16,384 4 KB pages but only 32 2 MB pages, and a 64-entry TLB
+covers 256 KB against 128 MB.
+<br><br>
+In the lab, Step 4 "the tail" runs <code>tail.cpp</code> three times and reads p50, p99, p99.9 and max; Step 5
+names the cause and applies the fix. In the arena the tournament debrief asks the fastest team what its last
+tail fix was: you want an allocation or a syscall named out loud.
+"""),
+        C("Why the mean lies, measured properly: histograms and coordinated omission", "w8c5", """
+Measuring the tail needs two tools (Deck U8, "Why the Mean Lies", "perf &mdash; Your First Reach" and "Flame
+Graphs, Counters &amp; Cycle Counting"). The first is a histogram that can record every sample on the hot path.
+Sorting a growing vector cannot; a log-linear histogram, the HdrHistogram idea, can. Each power of two is split
+into 32 sub-buckets, so recording is a count-leading-zeros instruction, a shift and an increment, memory is fixed
+(16,384 bytes here, whatever the sample size), and the relative error is bounded. The snippet records 100,000
+synthetic latencies: p50 24,015 ns exact against 23,552 in the histogram, p99 27,941 against 27,648, p99.9
+1,386,436 against 1,376,256, all within 2%.
+<br><br>
+The second tool is honesty about what was never sent. A load generator that waits for each reply before sending
+the next stops sending during a stall, so a 20 ms stall is recorded as one slow sample: the naive p99 and p99.9
+are both 30 &micro;s. Recording the roughly 200 requests that should have been sent during the stall, each with
+the delay it would have seen, gives a p99 of 9,800 &micro;s and a p99.9 of 18,900: coordinated omission
+corrected.
+<br><br>
+The course's replay harness avoids the problem by construction: it drives a recorded tape at its own clock and
+timestamps against a steady clock, never the wall clock. In the lab these are the numbers Step 4 prints; in the
+arena they are the LATENCY tab.
+""", r"\text{bucket}(v) = 32\,(\lfloor\log_2 v\rfloor - 4) + \big\lfloor v / 2^{\lfloor\log_2 v\rfloor - 5}\big\rfloor \bmod 32"),
+    ],
+    "widget": {
+        "type": "histogram",
+        "title": "A tick-to-trade sample in microseconds: a tight body and a thin, long tail",
+        "params": {
+            "sampler": "bootstrap",
+            "params": {"data": [38, 39, 40, 40, 41, 41, 41, 42, 42, 42, 43, 43, 43, 44, 44, 45, 45, 46, 47, 48,
+                                39, 40, 40, 41, 41, 42, 42, 43, 43, 44, 44, 45, 46, 47, 49, 52, 58, 71, 96, 140,
+                                40, 41, 42, 42, 43, 44, 45, 210, 38, 39]},
+            "bins": 40,
+            "overlay": False,
+            "n": 5000,
+            "seed": 32708,
+            "q": 0.01,
+        },
+    },
+    "pitfalls": [
+        "Accepting a faster build whose checksum changed: -ffast-math reassociates float sums, and the optimisation changed the answer.",
+        "Going branchless before measuring: a well-predicted branch is nearly free, and mask arithmetic can lengthen the dependency chain.",
+        "Busy-polling on a core the scheduler also uses: the poll loop gets preempted and the tail comes back worse.",
+        "Measuring latency with a closed-loop client and no correction: coordinated omission records a long stall as a single sample.",
+    ],
+    "check": [
+        {"q": "A build with -O3 -march=native -ffast-math is 20% faster than -O3 -march=native, but prints a different checksum. What should you conclude?",
+         "options": ["Ship it: 20% is significant", "The flag changed the math, since reassociating float operations changes results, so it does not count until the difference is shown to be acceptable", "The first build was wrong", "Checksums always vary between builds"],
+         "answer": 1,
+         "why": "-ffast-math lets the compiler reorder floating-point operations, which changes rounding, as the snippet shows with 528.715 against 528.753. A deterministic program's checksum does not vary between correct builds, so the change is caused by the flag, and the lab's rule is that it does not count."},
+        {"q": "The same 100,000 values are processed unsorted and then sorted. Why can the sorted pass be several times faster on a branchy loop?",
+         "options": ["Sorted data uses less memory", "The branch becomes predictable, so mispredictions drop from about half to a handful", "Sorting enables SIMD automatically", "The compiler removes the branch for sorted data"],
+         "answer": 1,
+         "why": "The predictor learns a long run of not-taken followed by a long run of taken; the snippet counts 3 mispredictions against 49,926. Memory use is the same, and the compiler cannot know at compile time that the data is sorted."},
+        {"q": "What does kernel bypass remove from the receive path, and what does it cost?",
+         "options": ["It removes the NIC; it costs nothing", "It removes interrupts, syscalls and copies; it costs a core that busy-polls at 100%", "It removes TCP; it costs reliability", "It removes the cache; it costs memory"],
+         "answer": 1,
+         "why": "User-space polling of the NIC ring skips the interrupt, the kernel stack, the syscall and the copy. The price is a dedicated, pinned core spinning even when idle, plus a more specialised software stack. The NIC and the caches are still there."},
+        {"q": "A closed-loop client sends one request every 100 us, waiting for each reply. The server stalls for 20 ms once. What does naive recording report?",
+         "options": ["About 200 slow samples", "One slow sample, so the p99 barely moves", "No samples during the stall, so the stall is invisible in the max", "The correct p99.9"],
+         "answer": 1,
+         "why": "The client sends nothing while it waits, so only the one in-flight request sees the stall: one sample of 20 ms, with the p99 and p99.9 still at 30 us. The max does show it. Correcting for coordinated omission adds the roughly 200 requests that should have been sent."},
+    ],
+})
+
+# ═══ Week 9 · Session 9 ═══
+WEEKS.append({
+    "n": 9,
+    "title": "Session 9 · Latency arbitrage, market making at speed and the live HFT tournament",
+    "topics": [
+        "one name, many venues: the NBBO and picking off a stale quote",
+        "the race and smart order routing",
+        "two-sided quotes, queue-aware requoting and inventory skew",
+        "adverse selection and markouts",
+        "the hardware frontier, market fairness and the ethics of speed",
+        "the tournament: three live rounds on the full market structure",
+        "the composite grade: p50/p99/p99.9, throughput, queue position, fill rate",
+        "final-exam logistics (remote, in the exam period)",
+    ],
+    "concepts": [
+        C("One name, many venues: the NBBO and the stale quote", "w9c1", """
+When one security trades on several venues, the best bid across all of them and the best offer across all of
+them form the national best bid and offer (Deck U9, "One Name, Many Venues" and "The NBBO &amp; Picking Off a
+Stale Quote"). A venue whose quote has not yet caught up with a move elsewhere is stale, and if its ask sits
+below another venue's bid the consolidated book is crossed: buy on the stale venue, sell on the fresh one.
+<br><br>
+The snippet builds a synthetic mid with small drift and rare jumps on venue A and lets venue B lag by three
+ticks. Over 20,000 ticks the NBBO is crossed on 7,072 of them, which sounds like free money. It is not: the
+largest gap is 96.2 bps, a round trip at the arena's 30-bps taker fee costs 60, and only 230 crosses clear the
+fee, netting 3,430 bps in total. Most "arbitrage" is smaller than the cost of taking it. The profitable crosses
+are the jumps, when a large move has happened on one venue and not yet on the other, and those are exactly the
+ticks where every fast bot fires at once.
+<br><br>
+In the arena, <code>multi_venue</code> goes live in the tournament scenario; Deck U9's session-9 code runs one
+client per venue writing a shared touch cache, your Phase 4 shared-memory structure, and takes the stale side
+when the NBBO crosses. The tournament debrief calls out the most common failure by name: an arb threshold that
+ignores the 30-bps taker fee, so the bot either never trades or trades at a loss.
+""", r"\text{take if } \frac{\text{bid}_A - \text{ask}_B}{\text{ask}_B} > 2 f_{\text{taker}}"),
+        C("The race: why the tail decides the ticks that matter", "w9c2", """
+Two bots running the same strategy finish in the order their messages reach the engine, and a smart order
+router is only as good as the latency of the path it picks (Deck U9, "The Race &amp; Smart Order Routing").
+The snippet races four bots 50,000 times with stated latency profiles, and on one race in ten, the volatile
+ticks, everyone fires at once and each bot's tail probability rises tenfold, the way allocation stalls, lock
+contention and queueing all get worse under load.
+<br><br>
+The bot with the lowest median (18 &micro;s) and a fat tail wins 94.0% of the calm races and only 40.3% of the
+volatile ones. The steady, allocation-free bot, with a 25 &micro;s median but a tiny tail, wins 5.9% of the calm
+races and 59.3% of the volatile ones. A bot with a lock on its hot path wins almost nothing, and a Python-speed
+bot nothing at all. The volatile ticks are where the jumps, the crossed NBBOs and the big fills live, so the
+steady bot wins the races worth winning. That is the course's thesis in one table: HFT is won on the tail, not
+the mean.
+<br><br>
+In the arena the tournament scenario turns every flag on at once: multi-venue, futures, the longest auctions,
+the scarcest short locates and an order quota of six messages per tick. The one question worth asking at every
+desk during the rounds is "show me your message count per tick".
+"""),
+        C("Queue-aware requoting and inventory skew under a quota", "w9c3", """
+A market maker keeps a bid and an ask resting and earns the spread when both fill (Deck U9, "Two-Sided Quotes
+&mdash; the Maker" and "Queue-Aware Requoting &amp; Inventory Skew"). Two things decide whether that works at
+speed: how often you requote, because each requote of a side is a cancel plus a new order and resets your queue
+position, and where you centre the quotes, skewed away from your inventory so fills bring you back toward flat.
+<br><br>
+The snippet runs 20,000 ticks under the tournament's quota of six messages per tick, with a quote filling once it
+has aged to the front of its queue. Requoting both sides every tick sends 79,200 messages, hits the quota 400
+times, and gets 0 fills: it resets its own queue position before it can ever reach the front. Requoting a side
+only when its price must change sends 16,218 messages, hits the quota 72 times, and gets 573 fills, after an
+average of 9.0 ticks in the queue. The skew rule centres the quotes at mid minus 0.002 &times; 100 &times;
+inventory ticks, so at an inventory of +5 the quotes sit 1.0 tick below mid.
+<br><br>
+In the arena the debrief asks the best MM SCORE team how many messages a tick it actually used: almost always
+fewer than the quota. The watch-list for the rounds starts with rate-limit rejects piling up, six messages spent
+on requotes and nothing left when the shock lands.
+""", r"\text{centre} = \text{mid} - \kappa\cdot q,\qquad \text{bid} = \text{centre} - \delta,\ \ \text{ask} = \text{centre} + \delta"),
+        C("Adverse selection and markouts", "w9c4", """
+A quote that fills instantly, every time, is usually bad news: someone with fresher information is hitting a
+price you have not updated yet (Deck U9, "Adverse Selection &amp; Markouts"). The diagnostic is the markout:
+for each fill, how far did the mid move afterwards, from your side's point of view? The markout at horizon h is
+side &times; (mid[t+h] &minus; fill price), with side +1 for a buy and &minus;1 for a sell. Positive means the
+fill was worth having; persistently negative means you are being picked off.
+<br><br>
+The snippet mixes 1,349 benign fills, which earn half the spread and then see a random walk, with 300 toxic
+fills that arrive just before an 8-cent move against the quote. Benign flow marks out at about +1 bps at every
+horizon; toxic flow at about &minus;7 bps. Blended at +10 ticks, the book loses 0.47 bps per fill, although only
+18.2% of fills were toxic. A maker's edge is small and adverse selection is large, so a minority of informed
+fills sinks the whole book.
+<br><br>
+The responses are to widen, to skew away from the toxic side, or to requote faster so the stale quote never
+exists, which brings the course back to latency. In the arena the debrief asks anyone with a negative markout:
+who was picking you off, and how would you know? The per-team TCA report shows the same thing in dollars.
+""", r"\text{markout}(h) = s\,\big(m_{t+h} - p_{\text{fill}}\big) / p_{\text{fill}} \times 10^4\ \text{bps}"),
+        C("The tournament grade is a composite", "w9c5", """
+The tournament does not grade the median (Deck U9, "In the Arena &mdash; The HFT Tournament" and "The
+Tournament Grade &mdash; a Composite"). It combines tick-to-trade p50/p99/p99.9, with the tail percentiles
+weighted most on the LATENCY tab, throughput under load, queue position (how often you sit near the front of
+the FIFO) and fill rate (did your fast quotes actually trade). Colocation, which cuts the venue's outbound delay
+from 200 ms to 20 ms, decides who lands first. The board is read on each axis separately: p99.9, MM SCORE,
+PASSIVE% and OTR.
+<br><br>
+This is the one Python snippet on the page, because it is table analysis rather than systems code. With
+illustrative numbers and illustrative weights (not the official formula), it ranks six teams. Delta has the
+fastest median (11 &micro;s) and the highest throughput, but a 900 &micro;s p99.9, and finishes last. Alpha, with
+the best p99.9, wins the composite; foxtrot, slower but first in queue position and fill rate, finishes third.
+The mean p99.9 across teams is 190 &micro;s against a median of 51: one team's tail drags the mean, the same
+lesson as session 1, now applied to a leaderboard. Rank-based scoring keeps a single outlier from dominating.
+<br><br>
+The pedagogical payload of the night is the observation that the round's best p99.9 and its best MM SCORE are
+usually different teams. Fast is necessary and not sufficient. The rounds, the debrief and the TCA report on fees
+paid against rebates earned close the course; the final exam follows remotely in the exam period.
+"""),
+    ],
+    "widget": {
+        "type": "simulate-paths",
+        "title": "The cross-venue price gap as a mean-reverting process: brief dislocations that the fastest bot closes",
+        "params": {"model": "ou", "params": {"x0": 0.0, "mu": 0.0, "theta": 6.0, "sigma": 0.4},
+                   "n_paths": 12, "seed": 32709, "horizon": 1, "steps": 300},
+    },
+    "pitfalls": [
+        "Setting an arb threshold below the round-trip taker fee: at 30 bps per side, a cross must exceed 60 bps before it pays.",
+        "Requoting every tick under a six-message quota: you spend the budget resetting your own queue position and have nothing left when the shock lands.",
+        "Racing the queue into the closing auction, which matches at a single clearing price where speed does nothing.",
+        "Quoting a new listing mid-session with an equity model; check the listing's asset type before quoting it.",
+    ],
+    "check": [
+        {"q": "Venue B's ask is 100.00 while venue A's bid is 100.40 and taker fees are 30 bps per side. Should you take it?",
+         "options": ["Yes: any crossed NBBO is free money", "Yes: the gap of about 40 bps beats one taker fee", "No: the gap of about 40 bps is below the 60-bps round-trip fee", "No: you can never trade on a crossed NBBO"],
+         "answer": 2,
+         "why": "The gap is 0.40/100.00 = 40 bps, and buying on B and selling on A pays the taker fee twice, 60 bps. It fails the hurdle. A cross is an opportunity only after costs, and the round trip needs both legs, not one."},
+        {"q": "Bot X has a 18 us median and a fat tail; bot Y has a 25 us median and almost no tail. Which wins more of the volatile races, and why?",
+         "options": ["X, because its median is lower", "Y, because on volatile ticks X's tail fires far more often and Y's stays small", "They tie", "Neither: volatility randomises the order"],
+         "answer": 1,
+         "why": "When everyone fires at once, stalls and contention multiply, so X's tail probability rises tenfold and it is often slower than Y; in the snippet Y wins 59.3% of volatile races against X's 40.3%. The median decides the calm races, which matter less."},
+        {"q": "Your fills show +1 bps markouts on most trades but -7 bps on a minority, and the blended markout is negative. What is happening?",
+         "options": ["Nothing: markouts are noise", "Adverse selection: a minority of informed fills outweighs the half-spread earned on the rest", "Your fees are too high", "Your queue position is too good"],
+         "answer": 1,
+         "why": "A maker earns about half the spread per benign fill and loses the whole move on each informed fill, so 18% toxic flow is enough to turn the book negative. Fees change the level, not the split between benign and toxic, and good queue position increases benign fills."},
+        {"q": "Why does the tournament use a composite grade instead of p50 alone?",
+         "options": ["p50 is hard to measure", "Speed is necessary but not sufficient: the tail, throughput, queue position and fill rate decide whether fast quotes make money", "To reward Python bots", "Because the mean is more accurate"],
+         "answer": 1,
+         "why": "A bot can have the best median and still lose the races that matter to its tail, spam messages, or never fill; the composite scores the whole path. p50 is easy to measure, and the course's whole argument is that the mean is the least informative summary of a latency distribution."},
+    ],
+})
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Course-level fields.
+# ─────────────────────────────────────────────────────────────────────────
+SOURCE_NOTE = ("Built from the instructor's own syllabus, lecture decks, labs and speaker guides (Autumn 2026), "
+               "with his permission; the code, questions and glossary are this dashboard's own and were "
+               "executed before publication.")
+
+DESCRIPTION = (
+    "In this course you write a C++ trading bot and compete against the rest of the class on a live exchange, and "
+    "the axis you are graded on is latency. Profit and loss is table stakes; speed is the score, and HFT is won on "
+    "the tail, not the mean, so the grade is p50, p99 and p99.9 tick-to-trade: the time from market data reaching "
+    "your socket to your order leaving it. Each session pairs a C++ and systems-performance lecture with an in-class "
+    "lab and an arena scenario that rewards exactly that capability. We start from market microstructure and the "
+    "limit order book, then work down the stack: memory, cache lines and ownership; pools, arenas and templates; "
+    "compile-time dispatch and a flat, cache-resident order book; atomics and lock-free pipelines; network "
+    "protocols and zero-copy parsing; SIMD, kernel bypass and profiling the latency tail. The course closes with "
+    "latency arbitrage across venues and a live tournament that scores your whole term at once. You leave with the "
+    "programming skills to build, measure and defend a low-latency trading system, which is what trading firms "
+    "test for."
+)
+
+PREREQUISITES = [
+    "Working C++: classes, references and pointers, the standard containers and algorithms, and building a "
+    "multi-file project with CMake. Session 2 revisits pointers, constructors and destructors, but it moves fast; "
+    "FINM 32600 (Computing for Finance in C++) or equivalent experience is the right preparation.",
+    "Comfort at the command line and with git: you clone a starter repository, build it, run tests with make, "
+    "and submit work from your own repository every week.",
+    "Basic market vocabulary: bid, ask, spread, limit and market orders. Session 1 builds the order book from "
+    "scratch, but it helps to have met these terms before (FINM 33500 covers them in depth).",
+    "Enough probability to read a distribution by its percentiles rather than its mean; nothing beyond an "
+    "introductory course.",
+]
+
+TEXTBOOKS = [
+    {"title": "Effective Modern C++", "author": "Scott Meyers",
+     "note": "Course reading (Deck U1, 'How This Class Works'): move semantics, smart pointers, noexcept and the rules sessions 2 and 3 rely on."},
+    {"title": "C++ Concurrency in Action (2nd edition)", "author": "Anthony Williams",
+     "note": "Course reading: std::thread, atomics, memory ordering and lock-free structures for sessions 5 and 6."},
+    {"title": "Modern C++ Design", "author": "Andrei Alexandrescu",
+     "note": "Course reading: policy-based design and the template techniques behind session 4's compile-time dispatch."},
+]
+
+SKILLS_BUILT = [
+    "low-latency-design", "modern-cpp", "cpp-templates", "lock-free-queues", "parallel-programming",
+    "inter-process-communication", "code-profiling", "market-microstructure", "order-book-dynamics",
+    "market-making", "market-data-feeds", "order-types", "transaction-costs", "unit-testing",
+]
+SKILLS_ASSUMED = ["cpp-stl", "git-version-control", "shell-and-filesystem"]
+
+# Proposed in data/new_tags/finm-32700.json; each joins skills_built once it is in the seed.
+NEW_TAGS = [
+    {"tag": "cache-aware-data-layout", "category": "programming",
+     "name": "Designing data for the memory hierarchy: cache lines, padding and alignment, struct-of-arrays, false sharing and flat price-indexed structures"},
+    {"tag": "custom-memory-allocators", "category": "programming",
+     "name": "Removing the heap from the hot path: fixed-size object pools, arena (bump) allocators, placement new and std::pmr memory resources"},
+    {"tag": "atomics-memory-ordering", "category": "programming",
+     "name": "std::atomic, compare-and-swap, happens-before and acquire/release ordering; data races, ABA and seqlocks"},
+    {"tag": "tail-latency-measurement", "category": "programming",
+     "name": "Measuring latency honestly: p50/p99/p99.9 of a sorted sample, log-linear histograms, coordinated omission and tail attribution"},
+    {"tag": "binary-protocol-parsing", "category": "data",
+     "name": "Wire formats on the hot path: FIX tag=value, fixed-width binary feeds, framing, sequencing and gap fill, zero-copy field extraction"},
+    {"tag": "kernel-bypass-networking", "category": "programming",
+     "name": "Getting the OS out of the way: busy-polling, kernel bypass, CPU pinning and isolation, huge pages and interrupt coalescing"},
+    {"tag": "latency-arbitrage", "category": "trading",
+     "name": "Cross-venue trading at speed: the NBBO, stale-quote pickoff, colocation and the fee hurdle that decides whether a cross pays"},
+]
+
+BRUSHUP = [
+    {"topic": "Pointers, references and object lifetime",
+     "why": "Session 2 goes from pointer arithmetic to the rule of five and smart pointers in one evening. If the difference between a pointer, a reference and an owning object is not automatic, the ownership half of that session will feel like syntax instead of design.",
+     "resource": "FINM 32600's early weeks, or the first chapters of Effective Modern C++"},
+    {"topic": "The standard containers and their costs",
+     "why": "Every performance argument in the course compares vector, deque, map and unordered_map by what they do in memory. Know which ones are contiguous and which allocate a node per element before session 2.",
+     "resource": "cppreference's container pages: read the complexity and iterator-invalidation notes"},
+    {"topic": "Building with CMake and running tests",
+     "why": "Lab 1 starts with make test and a CMake build of the C++ client. A broken toolchain costs you the first lab.",
+     "resource": "The starter repository's README and the AlgoArena team template: " + TEMPLATE},
+    {"topic": "Integer arithmetic, bit operations and powers of two",
+     "why": "Ring indices are masked with N - 1, alignment is rounded with a mask, branchless code uses the sign bit, and hash tables use power-of-two capacities. Being fluent with &, |, >> and two's complement saves real time from session 3 on.",
+     "resource": "Any systems-programming text's chapter on bit manipulation"},
+    {"topic": "Percentiles versus means",
+     "why": "The grade is p99.9. Know how to compute a nearest-rank percentile from a sorted sample and why a heavy-tailed distribution's mean describes almost nothing.",
+     "resource": "Session 1's latency slides and the FINM HFT skills dashboard: " + HFT_SKILLS},
+    {"topic": "The limit order book and price-time priority",
+     "why": "Sessions 1, 4 and 9 build on the book: two sorted sides, a FIFO queue per price, and trades at the resting price. Arriving with the vocabulary lets session 1 spend its time on why speed buys queue position.",
+     "resource": "FINM 33500's first sessions, or the Low-Latency Trading Arena: " + HFT_ARENA},
+    {"topic": "Threads and shared memory, conceptually",
+     "why": "Sessions 5 and 6 go straight to data races, atomics and memory ordering. Having written one program with two threads and a mutex makes the step to lock-free code much shorter.",
+     "resource": "C++ Concurrency in Action, chapters 1 to 3"},
+    {"topic": "How a network packet reaches your program",
+     "why": "Session 7 and session 8 assume you can picture the path NIC, kernel, socket buffer, read() and your handler. Ten minutes on sockets and TCP versus UDP pays off twice.",
+     "resource": "Any introductory networking text's chapters on sockets and transport protocols"},
+]
+
+INTERVIEW = [
+    {"level": "screen", "q": "Roughly what does an L1 cache hit cost compared with a miss to main memory, and what does that imply for how you write a hot path?",
+     "answer": "An L1 hit is on the order of one nanosecond and a miss to DRAM on the order of a hundred, so one miss costs about as much as a hundred hits. The unit of optimisation is therefore the memory access, not the instruction. I keep hot data contiguous and small so it stays in cache, access it sequentially so the prefetcher can run ahead, split hot fields from cold ones (struct of arrays where it helps), and avoid pointer-chasing containers like std::map or linked lists on the hot path. I also count the lines a structure touches before I trust its Big-O: a linear scan of a shallow, contiguous book routinely beats a tree."},
+    {"level": "screen", "q": "Why do trading firms quote latency as p99 or p99.9 rather than as a mean?",
+     "answer": "Latency distributions are heavy-tailed and often bimodal: a tight body plus rare stalls from page faults, allocation, lock contention or preemption. The mean lands between the modes and describes almost no real event, and it can hide a tail that is a hundred times the median. The races that make money are the volatile ticks when everyone fires at once, which is exactly when the tail appears, so the tail percentile predicts whether you win. I report p50, p99, p99.9 and max from a sorted sample or a log-linear histogram, and I correct for coordinated omission when the load generator is closed-loop."},
+    {"level": "screen", "q": "What is RAII, and why prefer unique_ptr to shared_ptr by default?",
+     "answer": "RAII ties a resource to an object's lifetime: acquire it in the constructor, release it in the destructor, and the compiler guarantees the release on every exit path, including exceptions. std::unique_ptr applies it to heap memory with sole ownership; it is move-only and the same size as a raw pointer, so it costs nothing. shared_ptr adds a control block with an atomic reference count, so every copy and destruction is a synchronising read-modify-write on a shared cache line, and cycles leak unless broken with weak_ptr. I use unique_ptr for ownership and pass non-owning references or raw pointers into hot functions."},
+    {"level": "screen", "q": "A trade executes when an aggressive order crosses the book. At what price, and who fills first at a given price?",
+     "answer": "The trade executes at the resting order's price, not the aggressor's limit, and if the aggressor sweeps several levels each slice prints at its own level, giving a blended average. Priority is price first, then time: a better price always fills first, and at the same price the earlier order fills first, in a strict FIFO queue. That second rule is why latency is valuable. Arriving earlier at a price puts you nearer the front, and a cancel-and-replace loses all the time priority you had accumulated. Market orders never rest; any unfilled remainder is cancelled."},
+    {"level": "onsite", "q": "Design a single-producer, single-consumer queue between a socket-reader thread and a strategy thread.",
+     "answer": "A bounded ring with a power-of-two capacity, so the slot is the index masked by N minus 1. The producer owns head and the consumer owns tail, and both indices grow forever, so full is head minus tail equal to N and empty is head equal to tail. Push checks for full with an acquire load of tail, writes the slot, then publishes with a release store of head plus one; pop mirrors it. Head and tail are each alignas(64) to avoid false sharing. No CAS and no lock are needed because each index has one writer. I would test it with two real threads, a sequence checksum and ThreadSanitizer."},
+    {"level": "onsite", "q": "Your on_book handler allocates on the heap. Why does that matter if the average allocation is fast, and how do you remove it?",
+     "answer": "The average is not the problem; the variance is. The allocator may walk a fragmented free list, take a lock or fault in a fresh page, so the same call that takes tens of nanoseconds on a quiet tick takes microseconds on a busy one, and that is the p99.9. I find allocations by counting calls to a replaced operator new on a replay tape, then remove them: reserve containers at startup, use fixed arrays, pool objects with an intrusive free list, put per-tick scratch on a monotonic arena or a pmr buffer with a null upstream, and avoid strings that can outgrow the small-string buffer."},
+    {"level": "onsite", "q": "What is false sharing, how would you recognise it, and how do you fix it?",
+     "answer": "Two threads write different variables that happen to share one 64-byte cache line. Each write invalidates the other core's copy, so the line ping-pongs through the coherence protocol even though there is no logical sharing. The symptom is a multithreaded version that is slower than the single-threaded one, with nothing contended in the source; hardware counters show heavy coherence traffic. The fix is to give each hot variable its own line with alignas(64), as with the head and tail of an SPSC ring, or better, to keep per-thread state and merge it off the hot path."},
+    {"level": "onsite", "q": "Explain acquire/release ordering with an example of publishing data between threads.",
+     "answer": "Thread A fills a struct with ordinary stores, then stores a flag with memory_order_release. Thread B loads the flag with memory_order_acquire; if it sees the flag set, every write A made before the release is visible to B after the acquire. That is a happens-before edge, and neither the compiler nor the CPU may move the data writes after the release or the reads before the acquire. Relaxed ordering on the flag would allow B to see the flag before the data. volatile does not help, since it neither makes operations atomic nor orders them across threads. seq_cst is stronger than needed for one-way publication."},
+    {"level": "onsite", "q": "How would you represent an order book for a single instrument on the hot path?",
+     "answer": "Prices sit on a tick grid, so each side is a flat array indexed by tick minus base tick, covering a band around the reference price, for example plus or minus 5% at one cent, which is about a thousand slots of eight bytes and stays cache-resident. Add is one store, the best price is a cached index, and reading the touch is one load. When the best level empties I scan contiguous slots toward worse prices, which prefetches well. Each level keeps FIFO order so I can compute queue_ahead for my own orders. Orders outside the band are rejected or trigger a re-centre off the hot path, never a resize."},
+    {"level": "senior", "q": "Your bot shows a 40 microsecond mean and a 5 millisecond p99.9. Walk me through finding and fixing the tail.",
+     "answer": "A hundredfold gap is a stall, not slow arithmetic. First I reproduce it deterministically on a recorded tape with a replay harness, so network noise cannot hide it, and I record every sample in a log-linear histogram. Then I attribute the spikes: correlate them with allocation counts, page-fault counters, context switches and core migrations, and look at perf and flame graphs for the slow ticks. The usual causes are heap allocation, first-touch page faults, lock contention and scheduler preemption. The fixes are pools and reserved containers, pre-faulting or locking memory, lock-free handoffs, and pinning to an isolated core. I accept a fix only if p99.9 moves on the same tape."},
+    {"level": "senior", "q": "When is kernel bypass worth it, and what does it cost?",
+     "answer": "It is worth it when the network path dominates your budget: interrupt handling, the kernel stack, syscalls and copies can cost several microseconds per packet, and interrupt coalescing adds more. Bypass maps the NIC's rings into user space and a pinned thread busy-polls them, removing all of that. The costs are a dedicated core spinning at 100% even when the market is quiet, core isolation so the scheduler never interrupts it, a specialised stack you must maintain, and less tooling. Before buying it I would A/B it against cheaper steps on the same tape, such as busy-polling sockets, pinning and colocation, since they compete for the same latency budget."},
+    {"level": "senior", "q": "You see a crossed NBBO across two venues. How do you decide whether to take it, and what makes this strategy fragile?",
+     "answer": "I take it only if the gap exceeds the full round-trip cost: two taker fees, expected slippage if the stale quote is gone before I arrive, and any hedging cost. At 30 bps a side, a cross must clear 60 bps. The strategy is a pure race: the profitable crosses are the big jumps, exactly when every fast participant fires, so my win rate depends on my tail latency on volatile ticks, not my median. It is fragile because the edge shrinks as others colocate, because fees and quotas can erase it, and because a stale-quote pickoff is someone else's adverse selection, which invites wider quotes and raises fairness questions about the value of speed."},
+]
+
+REAPPEARS_IN = [
+    {"code": "FINM 33500", "how": "Systematic Trading Technologies runs the same AlgoArena exchange in Python. Its matching rules, maker/taker fees, message schemas and order-book microstructure are the ones this course's C++ bot trades against, and its asyncio event loop is the Python cousin of the non-blocking read loop in session 7."},
+    {"code": "FINM 32600", "how": "Computing for Finance in C++ is the preparation: the containers, classes and templates it introduces are what sessions 2 to 4 take apart for their memory and latency cost."},
+    {"code": "FINM 32950", "how": "High-Performance Numerical Computing for Finance applies the session-8 toolkit, SIMD, cache blocking and profiling, to numerical kernels instead of a trading hot path."},
+    {"code": "FINM 33150", "how": "Quantitative Trading Strategies designs the signals; this course asks what it costs to compute them inside a microsecond budget and whether their edge survives fees and adverse selection."},
+    {"code": "FINM 34600", "how": "The Analysis of High Frequency Data studies the tick data and microstructure noise that the feeds of session 7 deliver; markouts and the latency distributions of sessions 1 and 8 are high-frequency data in their own right."},
+    {"code": "FINM 35100", "how": "Information, Trading, and the Structure of Markets gives the theory behind session 9: informed traders, adverse selection, and why a market maker's quotes must account for who is hitting them."},
+    {"code": "FINM 32400", "how": "Software Developer Tools for Finance covers the git, testing and build tooling that every lab here assumes, from make test in Lab 1 to the sanitizer runs of sessions 5 and 6."},
+    {"code": "FINM 32800", "how": "Data Pipelines for Quantitative Research handles data at rest; the framing, sequencing, conflation and back-pressure of sessions 6 and 7 are the same pipeline ideas under a microsecond budget."},
+]
+
+GLOSSARY = [
+    {"term": "Tick-to-trade", "def": "The time from market data arriving at your socket to your order leaving it: parse, decide, serialise, send. The course's graded latency."},
+    {"term": "p99.9", "def": "The 99.9th percentile of a latency sample: the value below which 999 of every 1,000 ticks fall. The headline grade, because busy ticks are where stalls land."},
+    {"term": "Central limit order book (CLOB)", "def": "Resting buy orders sorted high to low and resting sell orders sorted low to high, matched by one engine under price-time priority."},
+    {"term": "Price-time priority", "def": "A better price executes first; at equal price, the earlier order executes first, in a strict FIFO queue per level."},
+    {"term": "Queue position (queue_ahead)", "def": "The shares resting ahead of your order at its price. Zero means you are next to fill; a cancel-and-replace sends you to the back."},
+    {"term": "Microprice", "def": "Top-of-book prices weighted by the opposite side's size, so fair value leans toward the side about to be exhausted."},
+    {"term": "Maker/taker", "def": "A fee schedule in which the aggressive (taker) side pays a fee and the passive (maker) side often earns a rebate, both as a fraction of notional."},
+    {"term": "Cache line", "def": "The 64-byte unit in which memory moves between DRAM and the CPU caches. The cost of a scan is the number of lines it touches."},
+    {"term": "False sharing", "def": "Two threads writing different variables on the same cache line, forcing the line to bounce between cores. Fixed with alignas(64)."},
+    {"term": "Struct of arrays (SoA)", "def": "Storing each field in its own contiguous array instead of an array of structs, so a scan of one field touches only that field's bytes."},
+    {"term": "RAII", "def": "Resource Acquisition Is Initialization: tie a resource to an object's lifetime so its destructor releases it on every exit path."},
+    {"term": "Object pool", "def": "A pre-allocated set of fixed-size slots with an intrusive free list; alloc and free are O(1) and never touch the heap after startup."},
+    {"term": "Arena (bump) allocator", "def": "A buffer and an offset: allocation rounds the offset to the alignment and adds the size; reset frees everything at once."},
+    {"term": "Placement new", "def": "Constructing an object in storage you already own, separating construction from allocation; paired with an explicit destructor call."},
+    {"term": "CRTP", "def": "The curiously recurring template pattern: a base template calls the derived class's methods through a static cast, giving polymorphism without a vtable."},
+    {"term": "Acquire/release", "def": "Memory orderings that create happens-before: writes before a release store are visible after an acquire load that reads it."},
+    {"term": "SPSC ring buffer", "def": "A bounded single-producer single-consumer queue in which each index has one writer, so it needs no lock and no compare-and-swap."},
+    {"term": "Seqlock", "def": "A single-writer structure in which the writer makes a sequence number odd while writing; readers retry if the number was odd or changed."},
+    {"term": "Kernel bypass", "def": "Mapping the network card's rings into user space and busy-polling them, removing interrupts, syscalls and copies from the receive path."},
+    {"term": "Coordinated omission", "def": "A measurement error in which a closed-loop load generator stops sending during a stall, so the stall is recorded as one sample instead of many."},
+]
+
+
+def seed_tags():
+    """Every tag the shared seed already allows (so EXTRA tags can join automatically)."""
+    path = os.path.join(HERE, "data", "skills_seed.js")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return set(re.findall(r'tag\s*:\s*"([a-z0-9-]+)"', fh.read()))
+    except OSError:
+        return set()
+
+
+def build():
+    known = seed_tags()
+    built = list(SKILLS_BUILT) + [t["tag"] for t in NEW_TAGS if t["tag"] in known and t["tag"] not in SKILLS_BUILT]
+    return {
+        "code": "FINM 32700",
+        "slug": "finm-32700",
+        "title": "Low Latency Trading Systems",
+        "instructor": "Sebastien Donadio",
+        "quarter": "Spring",
+        "units": 100,
+        "block": "electives",
+        "concentrations": ["financial-computing"],
+        "source": {
+            "page_url": "https://finmath.uchicago.edu/curriculum/degree-concentrations/financial-computing/finm-32700/",
+            "syllabus_url": "https://uchicago.box.com/s/6npwocd9tmffsbgddwgaujn9xto2gkbb",
+            "fetched": "2026-09-26",
+            "note": SOURCE_NOTE,
+        },
+        "tier": "A",
+        "description": DESCRIPTION,
+        "prerequisites": PREREQUISITES,
+        "textbooks": TEXTBOOKS,
+        "skills_built": built,
+        "skills_assumed": SKILLS_ASSUMED,
+        "brushup": BRUSHUP,
+        "weeks": WEEKS,
+        "interview": INTERVIEW,
+        "reappears_in": REAPPEARS_IN,
+        "glossary": GLOSSARY,
+    }
+
+
+HEADER = """/* ==========================================================================
+   courses/finm-32700.js -- FINM 32700 . Low Latency Trading Systems
+
+   GENERATED by tools/gen_finm_32700.py -- edit the generator, not this file.
+   Tier A: built from the instructor's own course material (design arc,
+   speaker guides with every in-class lab step, deck outlines, and the
+   published per-session focus list), with his permission. Nine weeks =
+   sessions 1-9; the midterm sits in session 5 and session 9 is the live
+   latency tournament. Every snippet is C++20 (one Python table analysis in
+   week 9), deterministic, and its `output` is real stdout written by
+   tools/run_snippets.py.
+   ========================================================================== */
+"""
+
+
+def main():
+    course = build()
+    body = json.dumps(course, indent=2, ensure_ascii=False)
+    with open(OUT, "w", encoding="utf-8") as fh:
+        fh.write(HEADER)
+        fh.write("window.COURSES = window.COURSES || {};\n")
+        fh.write('window.COURSES["FINM 32700"] = ')
+        fh.write(body)
+        fh.write(";\n")
+    tags_path = os.path.join(HERE, "data", "new_tags", "finm-32700.json")
+    with open(tags_path, "w", encoding="utf-8") as fh:
+        json.dump(NEW_TAGS, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    n_con = sum(len(w["concepts"]) for w in WEEKS)
+    print("wrote %s: %d weeks, %d concepts, %d MCQs, %d interview, %d glossary"
+          % (os.path.relpath(OUT, HERE), len(WEEKS), n_con,
+             sum(len(w["check"]) for w in WEEKS), len(INTERVIEW), len(GLOSSARY)))
+    print("wrote %s: %d proposed tags" % (os.path.relpath(tags_path, HERE), len(NEW_TAGS)))
+
+
+if __name__ == "__main__":
+    main()

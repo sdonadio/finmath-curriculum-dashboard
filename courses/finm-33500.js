@@ -15,7 +15,7 @@ window.COURSES["FINM 33500"] = {
   "concentrations": [],
   "source": {
     "page_url": "https://finmath.uchicago.edu/curriculum/computing/finm-33500/",
-    "syllabus_url": "",
+    "syllabus_url": "https://uchicago.box.com/s/apdxqfe5cp9n43c4zqi69zvwg4ln8wc1",
     "fetched": "2026-09-26",
     "note": "Built from the instructor's own syllabus, lecture decks, labs and speaker guides (Autumn 2026), with his permission; the code, questions and glossary are this dashboard's own and were executed before publication."
   },
