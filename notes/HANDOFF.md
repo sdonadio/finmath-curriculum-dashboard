@@ -3,7 +3,13 @@
 Live site: https://sdonadio.github.io/finmath-curriculum-dashboard/   repo: github.com/sdonadio/finmath-curriculum-dashboard
 Local preview: `cd ~/PycharmProjects/FinMathCurriculumArena && python3 -m http.server 8765 --bind 127.0.0.1` → http://127.0.0.1:8765/
 
-## CHECKPOINT 2026-09-26 18:40 ET — all agents stopped by request (account switch)
+## CHECKPOINT 2026-09-26 ~21:15 ET — both tier-A courses LIVE; everything else FROZEN by Sebastien
+17 course files live. FINM 33500 (e66b39d) and FINM 32700 (8417fbd) done per notes/TIER_A_BRIEF.md, 0 errors,
+sweep clean. 13 tier-B courses missing: 31200 32000 32400 32600 32950 33100 33160 33200 34500 35600 35700 35900 (+ none tier A).
+HIS RULE: do NOT relaunch tier-B agents until he confirms Mark Hendricks has replied. When he does: Sonnet ≤5,
+brief notes/CONTENT_BRIEF.md, reuse notes/scratch_snippets/ + tools/gen_finm_34500.py stub.
+
+## (older) CHECKPOINT 2026-09-26 18:40 ET — all agents stopped by request (account switch)
 15 course files live (see `ls courses/`). 14 missing: 31200 32000 32400 32600 32700 32950 33100 33160 33200 33500 34500 35600 35700 35900.
 Partial work saved:
 - tools/gen_finm_33500.py  (26 KB, Opus tier A, week 1 snippets only) → finish with Opus per notes/TIER_A_BRIEF.md
@@ -37,5 +43,4 @@ Roger Lee have been sent the link (draft in Gmail) — their pages (36700, 37400
 ones colleagues look at first.
 
 ## Known nit
-courses/finm-34000.js: one snippet lacks np.seterr(all="ignore") → stderr warning → run_snippets --check FAIL.
-Add the line to that snippet's src in the file, re-run run_snippets on the file, commit.
+(fixed 3b11bab) finm-34000.js np.seterr — run_snippets --check now passes on every file.
