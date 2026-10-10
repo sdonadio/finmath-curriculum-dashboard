@@ -12,7 +12,7 @@
 
    ── public API (app.js depends on it, do not change the shape) ─────────
      window.WIDGETS.version            "1"
-     window.WIDGETS.types              array of the 16 type ids, SCHEMA order first
+     window.WIDGETS.types              array of the 18 type ids, SCHEMA order first
      window.WIDGETS.has(type)          boolean
      window.WIDGETS.render(host, spec, opts)
                                        clears `host`, appends exactly one
@@ -61,7 +61,7 @@
    Every generated DOM id is prefixed "w<N>-" from a module counter, so a
    page with ten widgets never collides.
 
-   ── adding a 17th type ────────────────────────────────────────────────
+   ── adding a 19th type ────────────────────────────────────────────────
      1. write  function drawThing(c, p) { … }  using the shared helpers
         (c is the instance context: c.canvas/ c.controls/ c.stats/ c.legend/
         c.help/ c.id; p is the params object, already defaulted by you);
@@ -3269,23 +3269,32 @@
                loss: bool(p.loss, true), seed: int(p.seed, 12345, 1, 2147483646) };
     if (st.mode !== "tcp" && st.mode !== "udp") { st.mode = "both"; }
 
+    var simple = bool(p.simple, false);          /* tcp-vs-udp: loss first, only the controls that question needs */
     var svg = c.canvas(420, "client and server timelines with packets between them");
-    c.ctl(segmented(c, { label: "transport", options: [{ v: "tcp", label: "TCP" }, { v: "udp", label: "UDP" },
-                                                        { v: "both", label: "Side by side" }],
-                         value: st.mode, onChange: function (v) { st.mode = v; redraw(); } }).node);
+    var lossBtn = toggleBtn(simple ? "Packet loss: drop one packet" : "Drop one packet", st.loss,
+                            function (v) { st.loss = v; redraw(); });
+    var reseedBtn = button(simple ? "Lose a different packet" : "Reseed (which packet)",
+                           function () { st.seed = bumpSeed(st.seed); redraw(); });
+    if (simple) { c.ctl(lossBtn); c.ctl(reseedBtn); }
+    if (!simple) {
+      c.ctl(segmented(c, { label: "transport", options: [{ v: "tcp", label: "TCP" }, { v: "udp", label: "UDP" },
+                                                          { v: "both", label: "Side by side" }],
+                           value: st.mode, onChange: function (v) { st.mode = v; redraw(); } }).node);
+    }
     c.ctl(slider(c, { key: "rtt", label: "Round-trip time", min: 2, max: 100, step: 1, value: st.rtt,
                       fmt: function (v) { return Math.round(v) + " ms"; },
                       onInput: function (v) { st.rtt = v; redraw(); } }).node);
     c.ctl(slider(c, { key: "n", label: "Messages", min: 1, max: 8, step: 1, value: st.n,
                       fmt: function (v) { return String(Math.round(v)); },
                       onInput: function (v) { st.n = Math.round(v); redraw(); } }).node);
-    c.ctl(slider(c, { key: "gap", label: "Gap between writes", min: 0, max: 40, step: 1, value: st.gap,
-                      fmt: function (v) { return Math.round(v) + " ms"; },
-                      onInput: function (v) { st.gap = v; redraw(); } }).node);
-    c.ctl(toggleBtn("Nagle (TCP_NODELAY off)", st.nagle, function (v) { st.nagle = v; redraw(); }));
-    c.ctl(toggleBtn("TLS 1.3", st.tls, function (v) { st.tls = v; redraw(); }));
-    c.ctl(toggleBtn("Drop one packet", st.loss, function (v) { st.loss = v; redraw(); }));
-    c.ctl(button("Reseed (which packet)", function () { st.seed = bumpSeed(st.seed); redraw(); }));
+    if (!simple) {
+      c.ctl(slider(c, { key: "gap", label: "Gap between writes", min: 0, max: 40, step: 1, value: st.gap,
+                        fmt: function (v) { return Math.round(v) + " ms"; },
+                        onInput: function (v) { st.gap = v; redraw(); } }).node);
+      c.ctl(toggleBtn("Nagle (TCP_NODELAY off)", st.nagle, function (v) { st.nagle = v; redraw(); }));
+      c.ctl(toggleBtn("TLS 1.3", st.tls, function (v) { st.tls = v; redraw(); }));
+      c.ctl(lossBtn); c.ctl(reseedBtn);
+    }
 
     var S = c.stats([
       { key: "hs", label: "TCP set-up" }, { key: "tcp", label: "TCP: last delivered" },
@@ -3453,8 +3462,295 @@
             U.delivered < st.n ? "warn" : "ok");
     }
 
+    if (simple) {
+      c.help("Two timelines, same messages, same network. Left, TCP: a handshake before any data, every segment acknowledged, and with packet loss on, the lost segment (✕) is sent again after a timeout, while the segments behind it wait at the receiver, delivered but not released (head-of-line blocking, in orange). Right, UDP: no handshake and no ACKs, each datagram is fire-and-forget, so the lost one is simply gone and the receiver only learns of it from the gap in sequence numbers. Toggle the loss off to see the two converge, apart from TCP's handshake.");
+      redraw();
+      return;
+    }
     c.help("Time runs down the page; each slanted arrow is a packet crossing the network in half a round trip. TCP pays a handshake before any data (two round trips with TLS) and delivers every message in order, so one lost segment holds back the ones behind it until the retransmission lands (HOL); with Nagle on, small writes wait for the previous ACK and leave coalesced. UDP sends at once, keeps message boundaries and never waits, but a lost datagram is gone and only the next sequence number reveals the gap.");
     redraw();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     17. osi-stack — the seven layers as a clickable stack, with the
+         TCP/IP four alongside, and a "send a message" animation
+     params: layers:[{n (1–7), name, job, pdu, examples (short, on the button),
+                      protocols, devices, note,
+                      header:{proto, short, fields:[{f, b}], trailer:[{f, b}]}}],
+             message:{label, bytes}, select (layer shown first, default 7),
+             step_ms (animation pace, default 800)
+     The stack is HTML (each layer a real button, 44 px or taller), so it
+     reads and clicks at phone width; the detail panel draws the clicked
+     layer's header fields as boxes sized by their byte counts. "Send a
+     message" walks the same message down the sender's stack (each layer
+     prepends its header, L2 also appends its trailer), across the wire,
+     and up the receiver's stack (each layer checks and strips its own),
+     one layer per step; ◀ / ▶ step it by hand, and any layer click pauses.
+     ═══════════════════════════════════════════════════════════════════ */
+  function drawOsiStack(c, p) {
+    var lin = arr(p.layers), L = {}, i, k, n;
+    for (i = 0; i < lin.length; i++) {
+      var q = lin[i] || {};
+      n = int(q.n, 0, 0, 7);
+      if (n < 1) { continue; }
+      var h = q.header || {}, fl = arr(h.fields), tl = arr(h.trailer), F = [], T = [], hb = 0, tb = 0;
+      for (k = 0; k < fl.length; k++) { F.push({ f: str((fl[k] || {}).f, "?"), b: num((fl[k] || {}).b, 0, 0, 1e5) }); hb += F[k].b; }
+      for (k = 0; k < tl.length; k++) { T.push({ f: str((tl[k] || {}).f, "?"), b: num((tl[k] || {}).b, 0, 0, 1e5) }); tb += T[k].b; }
+      L[n] = { n: n, name: str(q.name, "Layer " + n), job: str(q.job, ""), pdu: str(q.pdu, ""),
+               protocols: str(q.protocols, ""), examples: str(q.examples, str(q.protocols, "")), devices: str(q.devices, ""), note: str(q.note, ""),
+               proto: str(h.proto, ""), short: str(h.short, str(h.proto, "").split(" ")[0]),
+               fields: F, trailer: T, hb: hb, tb: tb };
+    }
+    for (n = 1; n <= 7; n++) {
+      if (!L[n]) {
+        c.note("This OSI stack needs all seven layers (n = 1 … 7) in params.layers; layer " + n + " is missing.");
+        c.help("Nothing to show.");
+        return;
+      }
+    }
+    var msg = p.message || {}, MSG = { label: str(msg.label, "message"), bytes: num(msg.bytes, 100, 1, 1e6) };
+    var GROUPS = [{ name: "Application", from: 7, to: 5 }, { name: "Transport", from: 4, to: 4 },
+                  { name: "Internet", from: 3, to: 3 }, { name: "Link", from: 2, to: 1 }];
+    function groupOf(m) { return m >= 5 ? "Application" : (m === 4 ? "Transport" : (m === 3 ? "Internet" : "Link")); }
+    function col(m) { return series(7 - m); }
+    var st = { sel: int(p.select, 7, 1, 7), k: -1, timer: null, pace: int(p.step_ms, 800, 250, 4000) };
+
+    /* ── the stack: OSI buttons on the left, TCP/IP groups alongside ── */
+    var wrap = add(c.fig, el("div", "osi-wrap"));
+    var grid = add(wrap, el("div", "osi-grid"));
+    add(grid, el("div", "osi-hd", "OSI · 7 layers"));
+    add(grid, el("div", "osi-hd osi-hd2", "TCP/IP · 4"));
+    var btns = {};
+    for (n = 7; n >= 1; n--) {
+      (function (m) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "osi-l";
+        b.setAttribute("aria-pressed", "false");
+        b.setAttribute("style", "grid-row:" + (9 - m) + ";border-left-color:" + col(m));
+        add(b, el("span", "osi-n", String(m)));
+        var mid = add(b, el("span", "osi-nm"));
+        add(mid, el("b", null, L[m].name));
+        add(mid, el("i", null, L[m].examples));
+        add(b, el("span", "osi-pdu", L[m].pdu));
+        b.addEventListener("click", safe(function () { stop(); select(m); }));
+        btns[m] = add(grid, b);
+      }(n));
+    }
+    for (i = 0; i < GROUPS.length; i++) {
+      var g = el("div", "osi-g", GROUPS[i].name);
+      g.setAttribute("style", "grid-row:" + (9 - GROUPS[i].from) + " / " + (10 - GROUPS[i].to));
+      add(grid, g);
+    }
+    var det = add(wrap, el("div", "osi-det"));
+    det.setAttribute("aria-live", "polite");
+
+    function box(fd, trailer, m) {
+      var bx = el("span", "osi-f" + (trailer ? " tr" : ""));
+      bx.setAttribute("style", "flex-grow:" + Math.max(1, Math.round(Math.sqrt(fd.b || 1) * 10)) +
+                      ";border-color:" + col(m) + ";background:" + rgba(col(m), trailer ? 0.06 : 0.12));
+      add(bx, el("b", null, fd.f));
+      add(bx, el("i", null, fd.b ? fmt(fd.b, fd.b % 1 ? 1 : 0) + " B" : "bits"));
+      return bx;
+    }
+    function select(m) {
+      var j, x;
+      st.sel = m;
+      for (j = 1; j <= 7; j++) {
+        btns[j].setAttribute("aria-pressed", j === m ? "true" : "false");
+        btns[j].className = j === m ? "osi-l on" : "osi-l";
+      }
+      var Y = L[m];
+      clearNode(det);
+      var hd = add(det, el("div", "osi-dh"));
+      add(hd, el("b", null, "Layer " + m + " · " + Y.name));
+      add(hd, el("span", "chip", "TCP/IP: " + groupOf(m)));
+      add(hd, el("span", "chip", "PDU: " + Y.pdu));
+      add(det, el("p", "osi-job", Y.job));
+      add(det, el("div", "osi-k", Y.proto ? "Header it adds · " + Y.proto + " · " + fmt(Y.hb + Y.tb, 0) + " B" : "Header it adds"));
+      if (Y.fields.length || Y.trailer.length) {
+        var row = add(det, el("div", "osi-hdr"));
+        for (x = 0; x < Y.fields.length; x++) { add(row, box(Y.fields[x], false, m)); }
+        if (Y.trailer.length) {
+          var pl = add(row, el("span", "osi-f pl", "… what the layer above handed down …"));
+          for (x = 0; x < Y.trailer.length; x++) { add(row, box(Y.trailer[x], true, m)); }
+          pl.setAttribute("style", "flex-grow:30");
+        }
+      } else {
+        add(det, el("p", "osi-none", "No header of its own in this example: see the note below."));
+      }
+      var kv = add(det, el("dl", "osi-kv"));
+      add(kv, el("dt", null, "Protocols")); add(kv, el("dd", null, Y.protocols));
+      add(kv, el("dt", null, "Devices")); add(kv, el("dd", null, Y.devices));
+      if (Y.note) { add(kv, el("dt", null, "In trading")); add(kv, el("dd", null, Y.note)); }
+    }
+
+    /* ── the animation: sender stack, wire, receiver stack ── */
+    var svg = c.canvas(330, "a message encapsulated down the sender's stack and decapsulated up the receiver's");
+    svg.__wrap.className = "svgwrap osi-anim";
+    /* the steps: 7..1 down the sender (add), the wire, 1..7 up the receiver (strip) */
+    var STEPS = [];
+    for (n = 7; n >= 1; n--) { STEPS.push({ side: 0, n: n, act: "add" }); }
+    STEPS.push({ side: 2, n: 0, act: "wire" });
+    for (n = 1; n <= 7; n++) { STEPS.push({ side: 1, n: n, act: "strip" }); }
+    /* which layers' headers are on the message after step k */
+    function onAfter(k) {
+      var on = {}, j, s;
+      for (j = 0; j <= k; j++) {
+        s = STEPS[j];
+        if (s.act === "add") { on[s.n] = true; }
+        if (s.act === "strip") { on[s.n] = false; }
+      }
+      return on;
+    }
+    function bytesOn(on) {
+      var t = MSG.bytes, j;
+      for (j = 1; j <= 7; j++) { if (on[j]) { t += L[j].hb + L[j].tb; } }
+      return t;
+    }
+    var ctlPlay = button("▶ Send a message", function () { play(); }, "primary");
+    c.ctl(ctlPlay);
+    c.ctl(button("◀ Step", function () { stop(); go(st.k - 1); }));
+    c.ctl(button("Step ▶", function () { stop(); go(st.k + 1); }));
+    c.ctl(button("Reset", function () { stop(); go(-1); }));
+    var S = c.stats([{ key: "st", label: "Step" }, { key: "at", label: "Where" },
+                     { key: "do", label: "What this layer does", cls: "ok" }, { key: "by", label: "Bytes in the message" }]);
+    c.legend([{ color: POS_INK, label: "header just added" }, { color: NEG_INK, label: "header just checked and stripped" },
+              { color: AXIS_INK, label: "the application's message" }]);
+
+    function stop() {
+      if (st.timer !== null) { window.clearTimeout(st.timer); st.timer = null; }
+      ctlPlay.textContent = "▶ Send a message";
+    }
+    function play() {
+      stop();
+      go(0);
+      ctlPlay.textContent = "■ Sending…";
+      function tick() {
+        if (!document.documentElement.contains(c.fig)) { st.timer = null; return; }
+        if (st.k >= STEPS.length - 1) { stop(); return; }
+        go(st.k + 1);
+        st.timer = window.setTimeout(safe(tick), st.pace);
+      }
+      st.timer = window.setTimeout(safe(tick), st.pace);
+    }
+    function go(k) {
+      st.k = Math.max(-1, Math.min(STEPS.length - 1, k));
+      if (st.k >= 0 && STEPS[st.k].n) { select(STEPS[st.k].n); }
+      drawAnim();
+    }
+
+    function drawAnim() {
+      var top = 34, RH = 36, xs0 = 10, xs1 = 132, xr0 = W - 132, xr1 = W - 10, j, y;
+      var cur = st.k >= 0 ? STEPS[st.k] : null;
+      var on = st.k >= 0 ? onAfter(st.k) : {};
+      /* on a phone the figure scrolls inside its frame: keep the active stack in view */
+      var wr = svg.__wrap;
+      if (wr && cur && wr.scrollWidth > wr.clientWidth + 4) {
+        wr.scrollLeft = cur.side === 1 ? wr.scrollWidth : (cur.side === 2 ? (wr.scrollWidth - wr.clientWidth) / 2 : 0);
+      }
+      var prevOn = st.k >= 1 ? onAfter(st.k - 1) : {};
+      clearNode(svg);
+      svg.appendChild(svgText((xs0 + xs1) / 2, 18, "SENDER", 10, BODY_INK, "middle", "700"));
+      svg.appendChild(svgText((xr0 + xr1) / 2, 18, "RECEIVER", 10, BODY_INK, "middle", "700"));
+      function stack(x0, x1, side) {
+        for (j = 7; j >= 1; j--) {
+          y = top + (7 - j) * RH;
+          var hot = cur && cur.side === side && cur.n === j;
+          svg.appendChild(mk("rect", { x: x0, y: r1(y), width: x1 - x0, height: RH - 6, rx: 5,
+                                       fill: hot ? rgba(col(j), 0.22) : "#ffffff",
+                                       stroke: hot ? col(j) : AXIS_INK, "stroke-width": hot ? 2 : 1 }));
+          svg.appendChild(svgText(x0 + 8, y + RH / 2 + 1, j + " " + L[j].name, 10, hot ? col(j) : BODY_INK, "start", hot ? "700" : "600"));
+        }
+      }
+      stack(xs0, xs1, 0);
+      stack(xr0, xr1, 1);
+      /* the wire between the two physical layers */
+      var wy = top + 6 * RH + (RH - 6) / 2;
+      svg.appendChild(mk("line", { x1: xs1, y1: r1(wy), x2: xr0, y2: r1(wy), stroke: GRID_INK, "stroke-width": 2,
+                                   "stroke-dasharray": cur && cur.act === "wire" ? "6 4" : null }));
+      svg.appendChild(svgText(W / 2, wy + 22, "the medium: copper, fibre or radio", 9, LABEL_INK, "middle"));
+      if (!cur) {
+        svg.appendChild(svgText(W / 2, top + 3 * RH, "Press “Send a message”, or Step ▶", 11, GRID_INK, "middle", "600"));
+        S.set("st", "0 / " + STEPS.length); S.set("at", "nothing sent yet");
+        S.set("do", "Each layer adds its header on the way down and strips it on the way up.", "ok");
+        S.set("by", fmt(MSG.bytes, 0) + " B (" + MSG.label + ")");
+        return;
+      }
+      /* the message, drawn as blocks: outer headers left, inner right, trailers after the payload */
+      var segs = [], m2;
+      var showOn = {};
+      for (m2 = 1; m2 <= 7; m2++) { showOn[m2] = on[m2] || (cur.act === "strip" && m2 === cur.n && prevOn[m2]); }
+      for (m2 = 1; m2 <= 7; m2++) {
+        if (showOn[m2] && L[m2].hb > 0) { segs.push({ n: m2, label: L[m2].short, b: L[m2].hb }); }
+      }
+      segs.push({ n: 0, label: MSG.label, b: MSG.bytes });
+      for (m2 = 7; m2 >= 1; m2--) {
+        if (showOn[m2] && L[m2].tb > 0) { segs.push({ n: m2, label: L[m2].trailer[0].f, b: L[m2].tb, tr: true }); }
+      }
+      var zone0 = xs1 + 14, zone1 = xr0 - 14, total = 0, s2;
+      for (j = 0; j < segs.length; j++) { segs[j].w = segs[j].n ? 40 : 96; total += segs[j].w; }
+      var scale = Math.min(1, (zone1 - zone0) / total);
+      var py = cur.act === "wire" ? wy - 32 : top + (7 - cur.n) * RH;
+      var px = (zone0 + zone1) / 2 - total * scale / 2;
+      if (cur.act === "wire") {
+        svg.appendChild(svgText(W / 2, wy - 38, "on the wire as bits: … 10101011 01000101 …", 9.5, GRID_INK, "middle", "700"));
+      } else {
+        var ax = cur.side === 0 ? zone0 - 6 : zone1 + 6, dx = cur.side === 0 ? 7 : -7;
+        svg.appendChild(mk("path", { d: "M" + r1(ax) + " " + r1(py + (RH - 6) / 2) + " l" + dx + " -5 l0 10 z", fill: GRID_INK }));
+      }
+      for (j = 0; j < segs.length; j++) {
+        s2 = segs[j];
+        var w = s2.w * scale;
+        var fresh = s2.n && cur.n === s2.n;
+        var colr = s2.n ? col(s2.n) : "#9a9a9a";
+        var stroke = fresh ? (cur.act === "add" ? POS_INK : NEG_INK) : colr;
+        svg.appendChild(mk("rect", { x: r1(px), y: r1(py), width: r1(Math.max(2, w - 2)), height: RH - 6, rx: 3,
+                                     fill: s2.n ? rgba(colr, fresh && cur.act === "strip" ? 0.08 : 0.8) : "#f1f1f1",
+                                     stroke: stroke, "stroke-width": fresh ? 2.4 : 1,
+                                     "stroke-dasharray": fresh && cur.act === "strip" ? "4 3" : null }));
+        var lab = s2.label;
+        if (lab.length > (s2.n ? 6 : 14)) { lab = lab.slice(0, s2.n ? 5 : 13) + "…"; }
+        svg.appendChild(svgText(px + w / 2 - 1, py + 13, lab, 8.5, s2.n && !(fresh && cur.act === "strip") ? "#ffffff" : BODY_INK, "middle", "700"));
+        svg.appendChild(svgText(px + w / 2 - 1, py + 24, fmt(s2.b, 0) + " B", 8, s2.n && !(fresh && cur.act === "strip") ? "#ffffff" : GRID_INK, "middle"));
+        px += w;
+      }
+      /* readouts */
+      var Y = cur.n ? L[cur.n] : null;
+      S.set("st", (st.k + 1) + " / " + STEPS.length);
+      S.set("at", cur.act === "wire" ? "between the two NICs" : ((cur.side === 0 ? "sender, " : "receiver, ") + "L" + cur.n + " " + Y.name));
+      var what;
+      if (cur.act === "wire") { what = "Only bits travel: the frame is serialised onto the medium and read off it at the far end."; }
+      else if (cur.act === "add") {
+        what = (Y.hb + Y.tb) > 0 ? ("adds " + Y.proto + ": " + fmt(Y.hb, 0) + " B in front" + (Y.tb ? " and " + fmt(Y.tb, 0) + " B behind" : "") + ".")
+                                  : "adds no header here: " + (Y.note || Y.job);
+      } else {
+        what = (Y.hb + Y.tb) > 0 ? ("checks and strips " + Y.proto + ", then hands the rest up.")
+                                  : "nothing to strip here: " + (Y.note || Y.job);
+      }
+      S.set("do", what, "ok");
+      var nowOn = onAfter(st.k);
+      S.set("by", fmt(bytesOn(nowOn), 0) + " B");
+    }
+
+    select(st.sel);
+    drawAnim();
+    c.help("Click any layer for its job, its PDU, the header it adds (each field sized by its byte count), its protocols and the devices that work there; the TCP/IP column shows how the four Internet layers group the same seven. “Send a message” animates encapsulation down the sender’s stack, the bits on the wire, and decapsulation up the receiver’s stack, one layer per step; ◀ / ▶ step it by hand.");
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     18. tcp-vs-udp — the transport-ladder retargeted for one question:
+         what does a lost packet do to each protocol?
+     params: rtt, msgs, loss (default on), seed, tls (default off)
+     Same simulation as transport-ladder (handshake, RTO = 2 × RTT,
+     in-order delivery and head-of-line blocking for TCP; fire-and-forget
+     datagrams with a visible sequence gap for UDP), always side by side,
+     with Nagle off so the only difference left is the transport itself.
+     ═══════════════════════════════════════════════════════════════════ */
+  function drawTcpVsUdp(c, p) {
+    drawTransportLadder(c, { mode: "both", rtt: num(p.rtt, 20, 2, 100), msgs: int(p.msgs, 6, 1, 8),
+                             gap: num(p.gap, 4, 0, 40), nagle: false, tls: bool(p.tls, false),
+                             loss: bool(p.loss, true), seed: int(p.seed, 12345, 1, 2147483646), simple: true });
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -3466,7 +3762,8 @@
     "payoff", "binomial-tree", "curve", "simulate-paths", "histogram",
     "slider-formula", "orderbook", "heatmap", "regression",
     "efficient-frontier", "tree-diagram", "timeline", "code-trace",
-    "concurrency-timeline", "packet-journey", "transport-ladder"
+    "concurrency-timeline", "packet-journey", "transport-ladder",
+    "osi-stack", "tcp-vs-udp"
   ];
   var TYPES = {
     "payoff":             drawPayoff,
@@ -3484,7 +3781,9 @@
     "code-trace":         drawCodeTrace,
     "concurrency-timeline": drawConcurrency,
     "packet-journey":     drawPacketJourney,
-    "transport-ladder":   drawTransportLadder
+    "transport-ladder":   drawTransportLadder,
+    "osi-stack":          drawOsiStack,
+    "tcp-vs-udp":         drawTcpVsUdp
   };
 
   /* ───────────────────────────── render ─────────────────────────────── */

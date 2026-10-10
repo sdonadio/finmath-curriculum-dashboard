@@ -1242,17 +1242,28 @@
       if (built) return;
       built = true;
       var i, box;
+      /* optional intro: a short motivating paragraph, through the same allow-list as `explain` */
+      if (trim(W.intro)) renderExplain(add(body, el("div", "wintro")), W.intro);
       /* topics */
       if (arr(W.topics).length) {
         box = add(body, el("div", "topics"));
         for (i = 0; i < W.topics.length; i++) add(box, el("span", "chip", trim(W.topics[i])));
       }
       /* concepts */
-      var cs = arr(W.concepts);
-      for (i = 0; i < cs.length; i++) body.appendChild(conceptCard(cs[i], i + 1));
-      /* widget(s) */
-      var ws = widgetsOf(W);
-      for (i = 0; i < ws.length; i++) body.appendChild(widgetHost(ws[i], C, n));
+      /* widget(s): a spec may carry `after: k` (1-based concept number) and is
+         then drawn right after concept k, so a week can interleave concept,
+         figure, concept. Widgets without a valid `after` follow the concepts. */
+      var cs = arr(W.concepts), ws = widgetsOf(W), placed = [], j;
+      for (i = 0; i < cs.length; i++) {
+        body.appendChild(conceptCard(cs[i], i + 1));
+        for (j = 0; j < ws.length; j++) {
+          if (!placed[j] && num(ws[j].after, 0) === i + 1) {
+            placed[j] = true;
+            body.appendChild(widgetHost(ws[j], C, n));
+          }
+        }
+      }
+      for (j = 0; j < ws.length; j++) if (!placed[j]) body.appendChild(widgetHost(ws[j], C, n));
       /* pitfalls */
       if (arr(W.pitfalls).length) {
         add(body, el("h3", null, "Where this goes wrong")).style.marginTop = "24px";

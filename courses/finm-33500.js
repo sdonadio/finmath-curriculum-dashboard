@@ -339,7 +339,7 @@ window.COURSES["FINM 33500"] = {
         },
         {
           "name": "threading.Thread and Lock: the bank-balance race and the check-then-act bug",
-          "explain": "<p><code>threading.Thread(target=fn, args=...)</code> runs <code>fn</code> concurrently with the main thread; <code>start()</code> launches it and <code>join()</code> waits for it to finish. Threads share the whole heap, which makes them cheap to talk between and dangerous: any object two threads touch is shared state, and the GIL does not make your logic atomic. It guarantees that one bytecode runs at a time, not that your three lines run together.</p><p>The snippet's account holds 100 and two desks each withdraw 80. The racy version checks <code>balance &gt;= amount</code>, then subtracts. A <code>Barrier</code> forces the interleaving that a busy machine eventually produces by itself: both threads pass the check before either acts. Both withdrawals are approved and the balance ends at -60. Wrapping check and act in <code>with acct.lock:</code> makes them one critical section: the second desk waits, sees 20 and is refused. The second half shows the lost update. Four threads book 2,000 fills each as read, yield, write, where <code>time.sleep(0)</code> stands in for anything that lets another thread run between the read and the write (a log call, an I/O call, the switch interval). Without the lock the position ends below 8,000; with it, exactly 8,000.</p><p>Four rules keep you out of trouble. Protect every invariant with one lock held across the whole check-then-act. Keep critical sections short, and never do I/O inside one. When you need several locks, always take them in the same order, or two threads will deadlock. Best of all, share nothing and hand data between threads through a queue. The same race on a position limit comes back under asyncio in week 3, where the danger point is an <code>await</code> rather than any line.</p>",
+          "explain": "<p><code>threading.Thread(target=fn, args=...)</code> runs <code>fn</code> concurrently with the main thread; <code>start()</code> launches it and <code>join()</code> waits for it to finish. Threads share the whole heap, which makes them cheap to talk between and dangerous: any object two threads touch is shared state, and the GIL does not make your logic atomic. It guarantees that one bytecode runs at a time, not that your three lines run together.</p><p>The snippet's account holds 100 and two desks each withdraw 80. The racy version checks <code>balance &gt;= amount</code>, then subtracts. A <code>Barrier</code> forces the interleaving that a busy machine eventually produces by itself: both threads pass the check before either acts. Both withdrawals are approved and the balance ends at -60. Wrapping check and act in <code>with acct.lock:</code> makes them one critical section: the second desk waits, sees 20 and is refused. The second half shows the lost update. Four threads book 2,000 fills each as read, yield, write, where <code>time.sleep(0)</code> stands in for anything that lets another thread run between the read and the write (a log call, an I/O call, the switch interval). Without the lock the position ends below 8,000; with it, exactly 8,000.</p><p>Four rules keep you out of trouble. Protect every invariant with one lock held across the whole check-then-act. Keep critical sections short, and never do I/O inside one. When you need several locks, always take them in the same order, or two threads will deadlock. Best of all, share nothing and hand data between threads through a queue. The same race on a position limit comes back under asyncio in week 4, where the danger point is an <code>await</code> rather than any line.</p>",
           "code": {
             "lang": "python",
             "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport threading\nimport time\n\nclass Account:\n    def __init__(self, balance):\n        self.balance = balance\n        self.lock = threading.Lock()\n        self.approved = []\n\ndef withdraw_racy(acct, who, amount, both_checked):\n    if acct.balance >= amount:          # CHECK ...\n        both_checked.wait()             # (forces the bad interleaving: both threads pass the check first)\n        acct.balance -= amount          # ... then ACT, on a balance the other thread is also spending\n        acct.approved.append(who)\n\ndef withdraw_locked(acct, who, amount):\n    with acct.lock:                     # check and act are one critical section\n        if acct.balance >= amount:\n            time.sleep(0.01)            # same pause as before, but nobody else can get in\n            acct.balance -= amount\n            acct.approved.append(who)\n\ndef two_desks(target, *extra):\n    acct = Account(100)\n    ts = [threading.Thread(target=target, args=(acct, who, 80) + extra) for who in (\"desk A\", \"desk B\")]\n    for t in ts:\n        t.start()\n    for t in ts:\n        t.join()\n    return acct\n\na = two_desks(withdraw_racy, threading.Barrier(2))\nprint(f\"no lock : balance 100, two withdrawals of 80 -> approved {len(a.approved)}, balance {a.balance}  <- overdrawn\")\nb = two_desks(withdraw_locked)\nprint(f\"locked  : balance 100, two withdrawals of 80 -> approved {len(b.approved)}, balance {b.balance}\")\n\n# the same race without a Barrier: read-modify-write of a shared position, 4 threads x 2,000 fills\ndef fill_racy(book, n):\n    for _ in range(n):\n        pos = book[\"pos\"]               # read\n        time.sleep(0)                   # any call that lets another thread run (I/O, logging, a GIL switch)\n        book[\"pos\"] = pos + 1           # write: may overwrite someone else's update\n\ndef fill_locked(book, n, lock):\n    for _ in range(n):\n        with lock:\n            pos = book[\"pos\"]\n            time.sleep(0)\n            book[\"pos\"] = pos + 1\n\nfor name, fn, extra in ((\"no lock\", fill_racy, ()), (\"locked \", fill_locked, (threading.Lock(),))):\n    book = {\"pos\": 0}\n    ts = [threading.Thread(target=fn, args=(book, 2000) + extra) for _ in range(4)]\n    for t in ts:\n        t.start()\n    for t in ts:\n        t.join()\n    print(f\"{name} : 8,000 fills booked -> position {'== 8000' if book['pos'] == 8000 else '< 8000, updates were lost'}\")\n",
@@ -348,7 +348,7 @@ window.COURSES["FINM 33500"] = {
         },
         {
           "name": "Queue and Event: handing ticks from a feed thread to a strategy thread",
-          "explain": "<p>The safest way for threads to cooperate is to share nothing but a queue. <code>queue.Queue</code> is a thread-safe FIFO with its own lock and condition variables: <code>put</code> and <code>get</code> block when the queue is full or empty, so the producer cannot get more than <code>maxsize</code> items ahead of the consumer, and nobody busy-waits. <code>threading.Event</code> is the other primitive: a flag that one thread sets and any number of threads wait on. That is how you tell everybody at once \"logged in\", \"stop\" or \"kill switch tripped\".</p><p>The snippet wires a feed thread to a strategy thread through <code>Queue(maxsize=4)</code>. The feed starts first and blocks on the <code>connected</code> event until the main thread sets it (the logon ack), so no tick is consumed before login. Then the strategy, deliberately slower at 2 ms per decision, receives all 40 ticks in sequence order. The producer found the queue full and had to wait: that is backpressure, and the bound caps both memory and staleness. A sentinel object marks the end of the stream so the consumer exits, and both threads are dead after <code>join</code>. In the second run the strategy trips the kill switch after 10 ticks. The feed calls <code>put(..., timeout=0.05)</code> and checks the event between attempts, so it notices and exits instead of blocking forever on a full queue.</p><p>This is the threaded twin of the asyncio queue in week 3 and of the multiprocessing queues below: a bounded handoff, a sentinel for the end, an event for shutdown, and a timeout on every blocking call so that shutdown cannot hang. Daemon threads that nobody joins are how bots die at the close with orders half sent.</p>",
+          "explain": "<p>The safest way for threads to cooperate is to share nothing but a queue. <code>queue.Queue</code> is a thread-safe FIFO with its own lock and condition variables: <code>put</code> and <code>get</code> block when the queue is full or empty, so the producer cannot get more than <code>maxsize</code> items ahead of the consumer, and nobody busy-waits. <code>threading.Event</code> is the other primitive: a flag that one thread sets and any number of threads wait on. That is how you tell everybody at once \"logged in\", \"stop\" or \"kill switch tripped\".</p><p>The snippet wires a feed thread to a strategy thread through <code>Queue(maxsize=4)</code>. The feed starts first and blocks on the <code>connected</code> event until the main thread sets it (the logon ack), so no tick is consumed before login. Then the strategy, deliberately slower at 2 ms per decision, receives all 40 ticks in sequence order. The producer found the queue full and had to wait: that is backpressure, and the bound caps both memory and staleness. A sentinel object marks the end of the stream so the consumer exits, and both threads are dead after <code>join</code>. In the second run the strategy trips the kill switch after 10 ticks. The feed calls <code>put(..., timeout=0.05)</code> and checks the event between attempts, so it notices and exits instead of blocking forever on a full queue.</p><p>This is the threaded twin of the asyncio queue in week 4 and of the multiprocessing queues below: a bounded handoff, a sentinel for the end, an event for shutdown, and a timeout on every blocking call so that shutdown cannot hang. Daemon threads that nobody joins are how bots die at the close with orders half sent.</p>",
           "code": {
             "lang": "python",
             "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport queue\nimport threading\nimport time\n\nTICKS = [(seq, round(185.45 + 0.01 * ((seq * 7) % 11 - 5), 2)) for seq in range(1, 41)]\nDONE = object()                                   # a sentinel: \"the feed is finished\"\n\ndef feed(q, connected, stop, stats):\n    connected.wait()                              # Event: block until the session is logged in\n    for tick in TICKS:\n        while not stop.is_set():\n            try:\n                if q.full():\n                    stats[\"blocked\"] += 1         # backpressure: the queue is bounded\n                q.put(tick, timeout=0.05)         # time out so a stop request is noticed\n                break\n            except queue.Full:\n                continue\n        if stop.is_set():\n            return\n    q.put(DONE)\n\ndef strategy(q, stop, seen, kill_after=None):\n    while True:\n        item = q.get()\n        if item is DONE:\n            q.task_done()\n            return\n        seen.append(item)\n        time.sleep(0.002)                         # deciding is slower than the feed produces\n        q.task_done()\n        if kill_after and len(seen) >= kill_after:\n            stop.set()                            # Event as a broadcast: every thread can see it\n            return\n\ndef session(kill_after=None):\n    q, connected, stop = queue.Queue(maxsize=4), threading.Event(), threading.Event()\n    seen, stats = [], {\"blocked\": 0}\n    threads = [threading.Thread(target=feed, args=(q, connected, stop, stats), name=\"feed\"),\n               threading.Thread(target=strategy, args=(q, stop, seen, kill_after), name=\"strategy\")]\n    for t in threads:\n        t.start()\n    time.sleep(0.01)\n    print(f\"  before login: feed alive and waiting = {threads[0].is_alive()}, ticks consumed = {len(seen)}\")\n    connected.set()                               # the logon ack arrived\n    for t in threads:\n        t.join(timeout=2)\n    return seen, stats, [t.is_alive() for t in threads]\n\nprint(\"full session:\")\nseen, stats, alive = session()\nprint(f\"  consumed {len(seen)} ticks, in sequence order: {[s for s, _ in seen] == list(range(1, 41))}, \"\n      f\"last {seen[-1]}\")\nprint(f\"  producer found the queue full: {stats['blocked'] > 0}  (maxsize=4 caps memory and staleness)\")\nprint(f\"  threads still alive after join: {alive}\")\nprint(\"kill switch after 10 ticks:\")\nseen, stats, alive = session(kill_after=10)\nprint(f\"  consumed {len(seen)} ticks; feed noticed stop and exited: {not alive[0]}; strategy exited: {not alive[1]}\")\n",
@@ -549,27 +549,447 @@ window.COURSES["FINM 33500"] = {
     },
     {
       "n": 3,
-      "title": "Session 2 · Concurrency, asyncio and the network: one event loop, TCP and UDP sockets, and the trading protocols on the wire",
+      "title": "Session 2 · Networking and trading protocols: the seven layers, UDP and TCP, sockets, FIX, ITCH and OUCH, and WebSocket",
+      "intro": "<p>Open the laptop in class and start your bot. Before the first book snapshot arrives, the laptop has associated with the access point and agreed the radio keys, leased an IP address, a gateway and a DNS resolver by DHCP, found the gateway's MAC address with ARP, asked DNS for the venue's address over UDP, opened a TCP connection and upgraded an HTTP request to a WebSocket. Each of those steps belongs to one layer of one model. This week takes the model apart in order: the seven layers, the two transports, the socket calls you program them with, a real server and client for each, the protocols that trading runs on, and last the WebSocket the arena uses, mapped onto everything before it.</p>",
       "topics": [
-        "concurrency versus parallelism; processes, threads and async",
-        "the GIL and why threads do not speed up CPU work",
-        "coroutines, tasks, gather and the event loop",
-        "asyncio.Queue: producer/consumer, backpressure and conflation",
-        "never block the loop; the one legitimate thread (yfinance)",
-        "races between awaits, locks, cancellation and reconnection",
-        "the OSI 7 layers and the TCP/IP 4; encapsulation, byte by byte",
-        "joining a network: association, DHCP, ARP, DNS, then TCP, TLS, the HTTP upgrade and WebSocket",
-        "IP addressing, longest-prefix routing and NAT",
-        "TCP versus UDP: handshake, sequence and acknowledgement numbers, Nagle and TCP_NODELAY",
-        "sockets in Python: a framed TCP server and client in two processes, UDP multicast",
-        "WebSockets with the websockets library",
-        "trading protocols: FIX sessions, ITCH/OUCH binary feeds, SBE and FAST, multicast gap fill, compared with the arena's JSON over WebSocket",
-        "capability you leave with: non-blocking market data and order handling on one event loop"
+        "the seven OSI layers and the four of TCP/IP: the job, PDU, header and devices of each; encapsulation",
+        "UDP versus TCP: connection, ordering, reliability, boundaries, head-of-line blocking, multicast",
+        "the socket API: socket, bind, listen, accept, connect, send, recv, sendto, recvfrom, close; blocking, timeouts, SO_REUSEADDR, backlog",
+        "a TCP echo server and client, and a UDP server and client, each in two processes",
+        "financial protocols: FIX sessions and orders, ITCH over MoldUDP64, OUCH, SBE, FAST and MDP 3.0",
+        "WebSocket: the upgrade, frames, ping/pong, close codes, and the arena's JSON mapped onto the protocols",
+        "capability you leave with: read a trading protocol layer by layer, and write the socket code under it"
+      ],
+      "concepts": [
+        {
+          "name": "The seven layers, bottom half: physical, data link and network move bits, frames and packets",
+          "explain": "<p>The OSI model splits networking into seven layers. Each has one job, a name for its unit of data (the PDU) and, usually, a header it adds. The bottom three get a packet to the right machine. <strong>Layer 1, physical</strong>, turns bits into signals: voltage on copper, light in fibre, radio for Wi-Fi. Its PDU is the bit, and the devices that work there are the NIC's transceiver, cables, optics, repeaters and hubs. The snippet prints what the layer costs: 12.3 µs to serialise a full 1,518-byte frame at 1 Gb/s and 1.23 µs at 10 Gb/s, one reason colocated firms pay for faster links.</p><p><strong>Layer 2, data link</strong>, moves a <em>frame</em> across one link, addressed by MAC address. An Ethernet frame is a 6-byte destination MAC, a 6-byte source MAC, a 2-byte EtherType (0x0800 for IPv4), the payload padded to the 64-byte minimum, and a 4-byte frame check sequence, a CRC-32 that the receiver recomputes. In the snippet one flipped bit fails the check and the frame is dropped. A <strong>switch</strong> works at this layer: it learns which MAC address lives behind which port from the source addresses it sees, floods a frame whose destination it has not learned yet, and from then on forwards to one port only.</p><p><strong>Layer 3, network</strong>, moves a <em>packet</em> from host to host across networks by IP address. The 20-byte IPv4 header carries the two addresses, a TTL, the protocol number (6 for TCP, 17 for UDP) and a header checksum. A <strong>router</strong> works here. It chooses the next hop by longest-prefix match in its routing table, decrements the TTL, recomputes the checksum and leaves the addresses alone. ARP, which finds the MAC address behind an IP address on the local subnet, sits between layers 2 and 3.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport ipaddress\nimport struct\nimport zlib\n\n# --- L1 physical: bits on a medium, at a line rate --------------------------------------------\nbyte = 0x45\nprint(f\"L1 physical  0x{byte:02x} leaves the NIC as the bits {byte:08b}; one full 1,518-byte frame takes\")\nfor name, bps in ((\"1 Gb/s copper\", 1e9), (\"10 Gb/s fibre\", 1e10), (\"25 Gb/s colo link\", 2.5e10)):\n    wire = (1518 + 8 + 12) * 8                     # frame + preamble + inter-frame gap\n    print(f\"     {name:<18} {wire / bps * 1e6:6.2f} us to serialise   (a 64-byte frame: {(64 + 20) * 8 / bps * 1e9:5.1f} ns)\")\n\n# --- L2 data link: an Ethernet frame, and a switch that learns MAC addresses ------------------\ndef mac(s):\n    return bytes.fromhex(s.replace(\":\", \"\"))\n\ndef ethernet(dst, src, ethertype, payload):\n    body = mac(dst) + mac(src) + struct.pack(\"!H\", ethertype) + payload.ljust(46, b\"\\0\")  # pad to the 64 B minimum\n    return body + struct.pack(\"<I\", zlib.crc32(body))                                     # FCS: CRC-32 of everything before it\n\nLAPTOP, ROUTER, PRINTER = \"a4:c3:f0:44:55:66\", \"f0:b3:ec:11:22:33\", \"3c:22:fb:00:00:07\"\nf = ethernet(ROUTER, LAPTOP, 0x0800, b\"an IPv4 packet goes here\")\nok = struct.unpack(\"<I\", f[-4:])[0] == zlib.crc32(f[:-4])\nbad = bytearray(f); bad[20] ^= 0x01                 # one bit flipped on the wire\nprint(f\"L2 data link frame {len(f)} B: dst {f[:6].hex(':')} src {f[6:12].hex(':')} type 0x{f[12:14].hex()} \"\n      f\"FCS ok={ok}; one flipped bit -> FCS ok={struct.unpack('<I', bytes(bad[-4:]))[0] == zlib.crc32(bytes(bad[:-4]))} (dropped)\")\n\ntable = {}\ndef switch(in_port, src, dst):\n    table[src] = in_port                           # learn: this MAC lives behind this port\n    out = table.get(dst)\n    return f\"port {out}\" if out is not None else \"flood to every other port\"\nfor port, src, dst in ((1, LAPTOP, ROUTER), (4, ROUTER, LAPTOP), (1, LAPTOP, ROUTER), (2, PRINTER, \"ff:ff:ff:ff:ff:ff\")):\n    print(f\"     switch: frame in on port {port}, {src[-5:]} -> {dst[-5:]:<5}  => {switch(port, src, dst)}\")\n\n# --- L3 network: an IPv4 header, a router's TTL decrement, longest-prefix match ---------------\ndef checksum16(data):\n    s = sum(struct.unpack(f\"!{len(data) // 2}H\", data))\n    while s >> 16:\n        s = (s & 0xFFFF) + (s >> 16)\n    return ~s & 0xFFFF\n\ndef ipv4(src, dst, ttl, proto, length):\n    h = struct.pack(\"!BBHHHBBH4s4s\", 0x45, 0, length, 0x1c46, 0x4000, ttl, proto, 0,\n                    ipaddress.IPv4Address(src).packed, ipaddress.IPv4Address(dst).packed)\n    return h[:10] + struct.pack(\"!H\", checksum16(h)) + h[12:]\n\nh = ipv4(\"192.168.1.23\", \"203.0.113.10\", 64, 6, 132)\nprint(f\"L3 network   IPv4 header {len(h)} B: {h.hex(' ')}\")\nprint(f\"     version 4, ihl 5, total length 132, ttl {h[8]}, protocol {h[9]} (TCP), checksum ok={checksum16(h) == 0}\")\nfor hop in range(1, 3):                            # every router: TTL - 1, recompute the checksum\n    ttl = h[8] - 1\n    h = h[:8] + bytes([ttl]) + h[9:10] + b\"\\0\\0\" + h[12:]\n    h = h[:10] + struct.pack(\"!H\", checksum16(h)) + h[12:]\n    print(f\"     router {hop}: ttl {h[8]}, new checksum 0x{h[10:12].hex()}, ok={checksum16(h) == 0}; addresses untouched\")\n\nroutes = {\"0.0.0.0/0\": \"default gateway 192.168.1.1\", \"192.168.1.0/24\": \"on-link: ARP for the MAC\",\n          \"10.8.0.0/16\": \"VPN tunnel\", \"10.8.4.0/24\": \"VPN, colo subnet\"}\nfor dst in (\"192.168.1.40\", \"10.8.4.2\", \"203.0.113.10\"):\n    d = ipaddress.ip_address(dst)\n    best = max((ipaddress.ip_network(n) for n in routes if d in ipaddress.ip_network(n)), key=lambda n: n.prefixlen)\n    print(f\"     route {dst:<13} longest match {str(best):<15} -> {routes[str(best)]}\")\n",
+            "output": "L1 physical  0x45 leaves the NIC as the bits 01000101; one full 1,518-byte frame takes\n     1 Gb/s copper       12.30 us to serialise   (a 64-byte frame: 672.0 ns)\n     10 Gb/s fibre        1.23 us to serialise   (a 64-byte frame:  67.2 ns)\n     25 Gb/s colo link    0.49 us to serialise   (a 64-byte frame:  26.9 ns)\nL2 data link frame 64 B: dst f0:b3:ec:11:22:33 src a4:c3:f0:44:55:66 type 0x0800 FCS ok=True; one flipped bit -> FCS ok=False (dropped)\n     switch: frame in on port 1, 55:66 -> 22:33  => flood to every other port\n     switch: frame in on port 4, 22:33 -> 55:66  => port 1\n     switch: frame in on port 1, 55:66 -> 22:33  => port 4\n     switch: frame in on port 2, 00:07 -> ff:ff  => flood to every other port\nL3 network   IPv4 header 20 B: 45 00 00 84 1c 46 40 00 40 06 20 64 c0 a8 01 17 cb 00 71 0a\n     version 4, ihl 5, total length 132, ttl 64, protocol 6 (TCP), checksum ok=True\n     router 1: ttl 63, new checksum 0x2164, ok=True; addresses untouched\n     router 2: ttl 62, new checksum 0x2264, ok=True; addresses untouched\n     route 192.168.1.40  longest match 192.168.1.0/24  -> on-link: ARP for the MAC\n     route 10.8.4.2      longest match 10.8.4.0/24     -> VPN, colo subnet\n     route 203.0.113.10  longest match 0.0.0.0/0       -> default gateway 192.168.1.1"
+          }
+        },
+        {
+          "name": "The seven layers, top half: transport, session, presentation and application, and encapsulation end to end",
+          "explain": "<p>The top four layers get the bytes to the right <em>program</em>, in a form it understands. <strong>Layer 4, transport</strong>, adds ports, so that one machine can hold many conversations, and either reliability (TCP, whose PDU is the segment) or nothing more (UDP, the datagram). It is the next concept. <strong>Layer 5, session</strong>, keeps a conversation alive across messages: logon, authentication, checkpoints, resumption. <strong>Layer 6, presentation</strong>, fixes how the data is represented: UTF-8 and JSON, binary encodings such as SBE, encryption by TLS. <strong>Layer 7, application</strong>, says what a message means: HTTP, WebSocket, FIX, DNS. The Internet's own model, TCP/IP, has four layers (link, internet, transport, application) and folds 5 to 7 into one. In practice TLS, WebSocket and the FIX session all run inside your process, not in the kernel.</p><p>The snippet sends one arena order down the stack. The 118-byte JSON <code>place_order</code> is UTF-8 encoded. WebSocket frames it with 6 bytes: FIN and opcode, the mask bit and the length, and a 4-byte masking key. TCP adds 20 bytes of ports, sequence and acknowledgement numbers and a checksum computed over a pseudo-header that includes both IP addresses. IPv4 adds 20 bytes, and Ethernet 14 in front and the 4-byte FCS behind. The 182-byte frame is 65% order. The receiver runs the stack in reverse: each layer checks its own field, then uses one number to choose who gets the rest. The EtherType selects IPv4, the protocol number selects TCP, the destination port selects the socket of the process, and the opcode says the payload is text.</p><p>The widget below draws the same stack. Click any layer for its job, PDU, header fields, protocols and devices, then send a message through it.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport ipaddress\nimport json\nimport struct\nimport zlib\n\ndef checksum16(data):\n    if len(data) % 2:\n        data += b\"\\0\"\n    s = sum(struct.unpack(f\"!{len(data) // 2}H\", data))\n    while s >> 16:\n        s = (s & 0xFFFF) + (s >> 16)\n    return ~s & 0xFFFF\n\nSRC, DST = ipaddress.IPv4Address(\"192.168.1.23\"), ipaddress.IPv4Address(\"203.0.113.10\")\n\n# ---- SENDER: each layer is handed the layer above's bytes and puts its own header in front ----\norder = {\"type\": \"place_order\", \"team_id\": \"TEAM07\", \"symbol\": \"AAPL\", \"side\": \"buy\",\n         \"order_type\": \"limit\", \"price\": 185.5, \"quantity\": 5}\nl7 = json.dumps(order, separators=(\",\", \":\"))                       # L7 application: what the message means\nl6 = l7.encode(\"utf-8\")                                              # L6 presentation: how it is encoded (TLS would encrypt here)\nMASK = bytes.fromhex(\"37fa213d\")                                     # clients must mask every frame (RFC 6455)\nl5 = struct.pack(\"!BB\", 0x81, 0x80 | len(l6)) + MASK + bytes(b ^ MASK[i % 4] for i, b in enumerate(l6))\n#                     ^ FIN + opcode 1 (text)   ^ MASK bit + length: the WebSocket frame that carries it\ndef tcp(sport, dport, seq, ack, payload):                            # L4 transport: ports, sequence numbers, checksum\n    hdr = struct.pack(\"!HHIIBBHHH\", sport, dport, seq, ack, 5 << 4, 0x18, 65535, 0, 0)\n    pseudo = SRC.packed + DST.packed + struct.pack(\"!BBH\", 0, 6, len(hdr) + len(payload))\n    c = checksum16(pseudo + hdr + payload)                           # covers the IP addresses too\n    return hdr[:16] + struct.pack(\"!H\", c) + hdr[18:] + payload\nl4 = tcp(51514, 8765, 1_000_001, 7_000_001, l5)\nip_hdr = struct.pack(\"!BBHHHBBH4s4s\", 0x45, 0, 20 + len(l4), 0x1c46, 0x4000, 64, 6, 0, SRC.packed, DST.packed)\nl3 = ip_hdr[:10] + struct.pack(\"!H\", checksum16(ip_hdr)) + ip_hdr[12:] + l4      # L3 network: addresses, TTL\neth = bytes.fromhex(\"f0b3ec112233a4c3f0445566\") + struct.pack(\"!H\", 0x0800) + l3\nl2 = eth + struct.pack(\"<I\", zlib.crc32(eth))                        # L2 data link: MACs, type, FCS trailer\n\nprint(f\"{'layer':<18}{'PDU':<9}{'adds':>6}{'size':>7}   first bytes of what this layer hands down\")\nfor name, pdu, unit, prev in ((\"L7 JSON, L6 UTF-8\", \"data\", l6, b\"\"), (\"L7 WebSocket\", \"data\", l5, l6),\n                              (\"L4 transport\", \"segment\", l4, l5), (\"L3 network\", \"packet\", l3, l4),\n                              (\"L2 data link\", \"frame\", l2, l3)):\n    print(f\"{name:<18}{pdu:<9}{len(unit) - len(prev):>5}B{len(unit):>6}B   {unit[:14].hex(' ')}\")\nprint(f\"L1 physical       bits     {len(l2) * 8:,} bits + 8 B preamble; the order is {len(l6) / len(l2):.0%} of the frame\")\n\n# ---- RECEIVER: each layer checks its own header, strips it, and picks who gets the rest ----\nf = l2\nassert struct.unpack(\"<I\", f[-4:])[0] == zlib.crc32(f[:-4])\netype = struct.unpack(\"!H\", f[12:14])[0]\np = f[14:-4]\nihl, proto = (p[0] & 0x0F) * 4, p[9]\ns_ip, d_ip = ipaddress.IPv4Address(p[12:16]), ipaddress.IPv4Address(p[16:20])\nseg = p[ihl:struct.unpack(\"!H\", p[2:4])[0]]\nsport, dport, seq = struct.unpack(\"!HHI\", seg[:8])\npseudo = s_ip.packed + d_ip.packed + struct.pack(\"!BBH\", 0, proto, len(seg))\ndata = seg[(seg[12] >> 4) * 4:]\nop, n, key = data[0] & 0x0F, data[1] & 0x7F, data[2:6]\nmsg = json.loads(bytes(b ^ key[i % 4] for i, b in enumerate(data[6:6 + n])).decode(\"utf-8\"))\nprint(\"decapsulation, bottom up:\")\nprint(f\"  L2 FCS ok, ethertype 0x{etype:04x} -> hand to IPv4\")\nprint(f\"  L3 {s_ip} -> {d_ip}, header checksum ok={checksum16(p[:ihl]) == 0}, protocol {proto} -> hand to TCP\")\nprint(f\"  L4 checksum ok={checksum16(pseudo + seg) == 0}, port {dport} -> the socket of the process listening on {dport}, seq {seq}\")\nprint(f\"  L7 WebSocket opcode {op} (text), {n} B, unmasked | L6 UTF-8 -> JSON | L7 {msg['type']}: {msg['side']} {msg['quantity']} {msg['symbol']} @ {msg['price']}\")\n",
+            "output": "layer             PDU        adds   size   first bytes of what this layer hands down\nL7 JSON, L6 UTF-8 data       118B   118B   7b 22 74 79 70 65 22 3a 22 70 6c 61 63 65\nL7 WebSocket      data         6B   124B   81 f6 37 fa 21 3d 4c d8 55 44 47 9f 03 07\nL4 transport      segment     20B   144B   c9 3a 22 3d 00 0f 42 41 00 6a cf c1 50 18\nL3 network        packet      20B   164B   45 00 00 a4 1c 46 40 00 40 06 20 44 c0 a8\nL2 data link      frame       18B   182B   f0 b3 ec 11 22 33 a4 c3 f0 44 55 66 08 00\nL1 physical       bits     1,456 bits + 8 B preamble; the order is 65% of the frame\ndecapsulation, bottom up:\n  L2 FCS ok, ethertype 0x0800 -> hand to IPv4\n  L3 192.168.1.23 -> 203.0.113.10, header checksum ok=True, protocol 6 -> hand to TCP\n  L4 checksum ok=True, port 8765 -> the socket of the process listening on 8765, seq 1000001\n  L7 WebSocket opcode 1 (text), 118 B, unmasked | L6 UTF-8 -> JSON | L7 place_order: buy 5 AAPL @ 185.5"
+          }
+        },
+        {
+          "name": "UDP against TCP: datagrams or a reliable byte stream, and what one lost packet costs each",
+          "explain": "<p>Both transports run on IP and add ports. Everything else differs. <strong>TCP</strong> opens a connection with a three-way handshake (SYN, SYN-ACK, ACK), numbers every byte, acknowledges what arrives and retransmits what does not, delivers in order, and slows down when the receiver's window is full (flow control) or the network drops packets (congestion control). Its header is 20 bytes or more. What it delivers is a <em>byte stream</em> with no message boundaries: in the snippet three <code>sendall</code> calls come out of one <code>recv</code> as 27 glued bytes. <strong>UDP</strong> adds an 8-byte header and nothing else: no connection, no acknowledgement, no ordering, no retransmission, no flow control. But each datagram arrives whole or not at all, so three <code>sendto</code> calls give three reads.</p><p>The price of TCP's guarantee shows when a packet is lost. In the snippet's model ten messages leave 2 ms apart over a 10 ms path, and message 4 is dropped. UDP delivers the other nine on time, and the receiver sees sequence number 5 after 3, so it knows exactly what is missing. TCP delivers all ten in order, but nothing passes the hole: messages 5 to 10 reach the receiver and wait there until the retransmission of 4 lands, 48 to 58 ms late. That is <strong>head-of-line blocking</strong>. TCP also spends one round trip on the handshake before its first byte.</p><p>Trading uses both, for opposite reasons. Market data goes out as <strong>UDP multicast</strong>: one datagram reaches every subscriber, nobody waits for a slow reader, and sequence numbers plus a recovery service handle the losses. Order entry runs over <strong>TCP</strong> (FIX, OUCH, the arena's WebSocket), where every message must arrive exactly once and in order. The widget below runs both side by side: turn the loss on and off.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport socket\nimport struct\nimport time\n\n# 1. the headers: UDP's 8 bytes against TCP's 20 (plus options)\nudp_hdr = struct.pack(\"!HHHH\", 51000, 26477, 8 + 36, 0)                         # ports, length, checksum\ntcp_hdr = struct.pack(\"!HHIIBBHHH\", 51514, 8765, 1_000_001, 7_000_001, 5 << 4, 0x18, 65535, 0, 0)\nprint(f\"UDP header {len(udp_hdr)} B: ports, length, checksum\")\nprint(f\"TCP header {len(tcp_hdr)} B: ports, seq, ack, offset, flags (SYN ACK PSH FIN RST), window, checksum, urgent\")\n\n# 2. message boundaries, on this machine's loopback: UDP keeps them, TCP is a byte stream\nrx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); rx.bind((\"127.0.0.1\", 0))\ntx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\nfor m in (b\"px=185.49\", b\"px=185.50\", b\"px=185.48\"):\n    tx.sendto(m, rx.getsockname())\nprint(\"UDP: 3 sendto  ->\", [rx.recvfrom(2048)[0].decode() for _ in range(3)], \"(3 datagrams, 3 reads)\")\ntx.close(); rx.close()\nsrv = socket.create_server((\"127.0.0.1\", 0))\ncli = socket.create_connection(srv.getsockname())\nconn, _ = srv.accept()\nfor m in (b\"px=185.49\", b\"px=185.50\", b\"px=185.48\"):\n    cli.sendall(m)\ntime.sleep(0.05)\nprint(\"TCP: 3 sendall ->\", [conn.recv(2048).decode()], \"(one stream: where a message ends is your problem)\")\nfor s in (cli, conn, srv):\n    s.close()\n\n# 3. ten messages, 2 ms apart, one-way delay 10 ms, and message 4 is lost (deterministic model)\nONE_WAY, GAP, LOST, N = 10.0, 2.0, 4, 10\nRTT, RTO = 2 * ONE_WAY, 3 * 2 * ONE_WAY            # retransmit after no ACK for 60 ms (a real RTO is >= 200 ms)\nsetup = RTT                                         # SYN, SYN-ACK, ACK before the first byte\nudp = {k: k * GAP + ONE_WAY for k in range(1, N + 1) if k != LOST}\narrive = {k: setup + k * GAP + ONE_WAY for k in range(1, N + 1)}\narrive[LOST] = setup + LOST * GAP + RTO + ONE_WAY  # the retransmission lands one RTO later\ntcp, released = {}, 0.0\nfor k in range(1, N + 1):                           # in-order delivery: nothing passes the hole\n    released = max(released, arrive[k])\n    tcp[k] = released\nprint(f\"one-way {ONE_WAY:.0f} ms, a message every {GAP:.0f} ms, message {LOST} lost:\")\nprint(f\"  {'msg':>3} {'UDP delivered':>14} {'TCP delivered':>14}  TCP waited behind the hole\")\nfor k in range(1, N + 1):\n    u = f\"{udp[k]:.0f} ms\" if k in udp else \"never (gap)\"\n    hol = tcp[k] - arrive[k] if k != LOST else 0.0\n    print(f\"  {k:>3} {u:>14} {tcp[k]:>11.0f} ms  {f'{hol:.0f} ms' if hol > 0 else ''}\")\nprint(f\"  UDP: 9 of 10, the receiver sees seq 3 then 5 and knows 4 is missing | \"\n      f\"TCP: 10 of 10, every one in order, the last at {max(tcp.values()):.0f} ms instead of {setup + N * GAP + ONE_WAY:.0f} ms\")\n\n# 4. the comparison, row by row\nROWS = [(\"\", \"TCP\", \"UDP\"),\n        (\"connection\", \"3-way handshake, then FIN/RST\", \"none: just send\"),\n        (\"delivery\", \"reliable: ACK + retransmit\", \"best effort: a loss is gone\"),\n        (\"ordering\", \"in order, always\", \"as it arrives; seq is yours\"),\n        (\"boundaries\", \"byte stream: frame it yourself\", \"one datagram = one message\"),\n        (\"flow/congestion\", \"receive window, cwnd\", \"none: may flood or be dropped\"),\n        (\"head-of-line\", \"a loss stalls later bytes\", \"none\"),\n        (\"fan-out\", \"one connection per peer\", \"multicast: 1 send, N receivers\"),\n        (\"trading use\", \"order entry, FIX, OUCH, WebSocket\", \"market data: ITCH, MDP3 multicast\")]\nfor a, b, c in ROWS:\n    print(f\"{a:<16}{b:<35}{c}\")\n",
+            "output": "UDP header 8 B: ports, length, checksum\nTCP header 20 B: ports, seq, ack, offset, flags (SYN ACK PSH FIN RST), window, checksum, urgent\nUDP: 3 sendto  -> ['px=185.49', 'px=185.50', 'px=185.48'] (3 datagrams, 3 reads)\nTCP: 3 sendall -> ['px=185.49px=185.50px=185.48'] (one stream: where a message ends is your problem)\none-way 10 ms, a message every 2 ms, message 4 lost:\n  msg  UDP delivered  TCP delivered  TCP waited behind the hole\n    1          12 ms          32 ms\n    2          14 ms          34 ms\n    3          16 ms          36 ms\n    4    never (gap)          98 ms\n    5          20 ms          98 ms  58 ms\n    6          22 ms          98 ms  56 ms\n    7          24 ms          98 ms  54 ms\n    8          26 ms          98 ms  52 ms\n    9          28 ms          98 ms  50 ms\n   10          30 ms          98 ms  48 ms\n  UDP: 9 of 10, the receiver sees seq 3 then 5 and knows 4 is missing | TCP: 10 of 10, every one in order, the last at 98 ms instead of 50 ms\n                TCP                                UDP\nconnection      3-way handshake, then FIN/RST      none: just send\ndelivery        reliable: ACK + retransmit         best effort: a loss is gone\nordering        in order, always                   as it arrives; seq is yours\nboundaries      byte stream: frame it yourself     one datagram = one message\nflow/congestion receive window, cwnd               none: may flood or be dropped\nhead-of-line    a loss stalls later bytes          none\nfan-out         one connection per peer            multicast: 1 send, N receivers\ntrading use     order entry, FIX, OUCH, WebSocket  market data: ITCH, MDP3 multicast"
+          }
+        },
+        {
+          "name": "The TCP socket API, call by call: socket, bind, listen, accept, connect, send, recv, close",
+          "explain": "<p>A socket is your program's handle on a transport endpoint: a file descriptor that the kernel ties to TCP or UDP. A TCP <strong>server</strong> makes four calls before any data moves. <code>socket(AF_INET, SOCK_STREAM)</code> creates the descriptor. <code>bind((host, port))</code> attaches it to a local address: port 0 lets the OS choose a free ephemeral port, and <code>127.0.0.1</code> admits only local clients where <code>0.0.0.0</code> admits anyone. <code>listen(backlog)</code> makes it a passive socket, and the backlog bounds how many completed handshakes may queue up waiting for the program. <code>accept()</code> blocks until one is queued and returns a <em>new</em> socket for that client, with the client's address; the listening socket keeps listening. The <strong>client</strong> makes two calls, <code>socket()</code> and <code>connect((host, port))</code>, which runs the handshake. The snippet shows that <code>connect</code> returns before the server has called <code>accept</code>: the two kernels finish the handshake by themselves and park the connection in the backlog.</p><p>Then the data. <code>send</code> returns how many bytes the kernel took, which can be fewer than you passed, so use <code>sendall</code>. <code>recv(n)</code> returns <em>up to</em> n bytes, whatever has arrived, and returns <code>b\"\"</code> once the peer has closed: that empty read is the only end-of-stream signal you get. <code>close()</code> sends FIN. Two options belong on trading sockets. <code>TCP_NODELAY</code> turns off Nagle's algorithm, which otherwise holds a small write until the previous one is acknowledged. <code>SO_REUSEADDR</code> lets a restarted server bind its port again: in the snippet the server hung up first, its side of the connection waits in TIME_WAIT, and a plain <code>bind</code> to the same port fails with EADDRINUSE, while one with the option succeeds. A <code>connect</code> to a port with no listener fails at once with <code>ConnectionRefusedError</code>, because the peer's kernel answers with RST.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport errno\nimport socket\n\ndef say(call, result):\n    print(f\"  {call:<44} {result}\")\n\nprint(\"server\")\nsrv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)               # TCP = SOCK_STREAM\nsay(\"srv = socket(AF_INET, SOCK_STREAM)\", f\"a file descriptor: fileno() >= 0 is {srv.fileno() >= 0}\")\nsrv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\nsay(\"srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)\", \"may rebind a port whose old connections sit in TIME_WAIT\")\nsrv.bind((\"127.0.0.1\", 0))\nPORT = srv.getsockname()[1]\nsay(\"srv.bind(('127.0.0.1', 0))\", f\"port 0 = 'any free port'; the OS chose an ephemeral port: {PORT > 1023}\")\nsrv.listen(8)\nsay(\"srv.listen(8)\", \"passive socket; backlog 8 = completed handshakes queued until accept()\")\n\nprint(\"client\")\ncli = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ncli.connect((\"127.0.0.1\", PORT))\nsay(\"cli.connect(('127.0.0.1', PORT))\", \"SYN, SYN-ACK, ACK done by the kernels; returns BEFORE any accept()\")\ncli.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\nsay(\"cli.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)\", \"Nagle off: small writes leave at once (set it for orders)\")\n\nprint(\"server\")\nconn, peer = srv.accept()\nsay(\"conn, peer = srv.accept()\", f\"a NEW socket per client; peer is the client's ephemeral port: {peer[1] == cli.getsockname()[1]}\")\nsay(\"\", f\"srv still listens on {PORT == srv.getsockname()[1]}; conn and srv are different fds: {conn.fileno() != srv.fileno()}\")\n\nprint(\"data\")\nn = cli.send(b\"BUY 5 AAPL 185.49\\n\")\nsay(\"n = cli.send(b'BUY 5 AAPL 185.49\\\\n')\", f\"returns bytes accepted by the kernel: {n} (may be fewer: use sendall)\")\nsay(\"conn.recv(1024)\", repr(conn.recv(1024)))\nconn.sendall(b\"ACK 1\\n\")\nsay(\"conn.sendall(b'ACK 1\\\\n'); cli.recv(1024)\", repr(cli.recv(1024)))\n\nprint(\"close\")\nconn.close()\nsay(\"conn.close()   (the server hangs up first)\", \"sends FIN; this side now waits in TIME_WAIT\")\nsay(\"cli.recv(1024)\", f\"{cli.recv(1024)!r}  <- empty bytes means the peer closed: stop reading\")\ncli.close(); srv.close()\n\nprint(\"errors you will meet\")\nprobe = socket.socket()\ntry:\n    probe.connect((\"127.0.0.1\", PORT))                                 # nobody listens there any more\nexcept ConnectionRefusedError as e:\n    say(\"connect() to a closed port\", f\"ConnectionRefusedError (errno {errno.errorcode[e.errno]}): the peer answered RST\")\nfinally:\n    probe.close()\n\n# the server closed first, so the connection on its port sits in TIME_WAIT (2 x MSL: 30 s to 4 min)\nagain = socket.socket()\ntry:\n    again.bind((\"127.0.0.1\", PORT))\n    say(\"bind(PORT) again WITHOUT SO_REUSEADDR\", \"succeeded\")\nexcept OSError as e:\n    say(\"bind(PORT) again WITHOUT SO_REUSEADDR\", f\"OSError {errno.errorcode[e.errno]}: why servers set SO_REUSEADDR\")\nfinally:\n    again.close()\nagain = socket.socket()\nagain.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\nagain.bind((\"127.0.0.1\", PORT))\nsay(\"bind(PORT) again WITH SO_REUSEADDR\", \"succeeded: the restarted server is back on its port\")\nagain.close()\n",
+            "output": "server\n  srv = socket(AF_INET, SOCK_STREAM)           a file descriptor: fileno() >= 0 is True\n  srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)  may rebind a port whose old connections sit in TIME_WAIT\n  srv.bind(('127.0.0.1', 0))                   port 0 = 'any free port'; the OS chose an ephemeral port: True\n  srv.listen(8)                                passive socket; backlog 8 = completed handshakes queued until accept()\nclient\n  cli.connect(('127.0.0.1', PORT))             SYN, SYN-ACK, ACK done by the kernels; returns BEFORE any accept()\n  cli.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)  Nagle off: small writes leave at once (set it for orders)\nserver\n  conn, peer = srv.accept()                    a NEW socket per client; peer is the client's ephemeral port: True\n                                               srv still listens on True; conn and srv are different fds: True\ndata\n  n = cli.send(b'BUY 5 AAPL 185.49\\n')         returns bytes accepted by the kernel: 18 (may be fewer: use sendall)\n  conn.recv(1024)                              b'BUY 5 AAPL 185.49\\n'\n  conn.sendall(b'ACK 1\\n'); cli.recv(1024)     b'ACK 1\\n'\nclose\n  conn.close()   (the server hangs up first)   sends FIN; this side now waits in TIME_WAIT\n  cli.recv(1024)                               b''  <- empty bytes means the peer closed: stop reading\nerrors you will meet\n  connect() to a closed port                   ConnectionRefusedError (errno ECONNREFUSED): the peer answered RST\n  bind(PORT) again WITHOUT SO_REUSEADDR        OSError EADDRINUSE: why servers set SO_REUSEADDR\n  bind(PORT) again WITH SO_REUSEADDR           succeeded: the restarted server is back on its port"
+          }
+        },
+        {
+          "name": "The UDP socket API, and what blocking, non-blocking and timeouts do to every call",
+          "explain": "<p>UDP needs fewer calls because there is no connection. A server calls <code>socket(AF_INET, SOCK_DGRAM)</code> and <code>bind</code> and can receive straight away: no <code>listen</code>, no <code>accept</code>. <code>recvfrom(bufsize)</code> returns one whole datagram and the sender's address, and the reply goes back with <code>sendto(data, addr)</code>. A client need not even bind, since the OS gives it an ephemeral port on its first <code>sendto</code>. Two details from the snippet matter. A datagram larger than the buffer you pass is truncated and the rest is discarded, so size the buffer for the largest message. And <code>connect()</code> on a UDP socket only records a default peer so that <code>send</code> needs no address: no packet is exchanged.</p><p>Every socket, TCP or UDP, is in one of three modes, and the mode decides what a call does when there is nothing to read. <strong>Blocking</strong>, the default (<code>settimeout(None)</code>), waits for ever, which is how a bot hangs on a dead feed. <strong>Timeout</strong> (<code>settimeout(0.05)</code>) waits at most that long and then raises <code>TimeoutError</code>, the right default for request and response code. <strong>Non-blocking</strong> (<code>setblocking(False)</code>) never waits: it raises <code>BlockingIOError</code> (EAGAIN) at once, so the program has to ask the kernel which sockets are ready. <code>select.select</code> does that. Given three feed sockets with data waiting on B and C, it returns B and C; after a quiet timeout it returns nothing.</p><p>That readiness loop, scaled up with <code>epoll</code> on Linux or <code>kqueue</code> on macOS, is what an asyncio event loop runs underneath: one thread, many non-blocking sockets, and work only where data is waiting.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport errno\nimport select\nimport socket\nimport time\n\ndef say(call, result):\n    print(f\"  {call:<42} {result}\")\n\nprint(\"UDP: no listen, no accept, no connection\")\nsrv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)                # UDP = SOCK_DGRAM\nsrv.bind((\"127.0.0.1\", 0))\nsay(\"srv = socket(AF_INET, SOCK_DGRAM); bind()\", \"ready to receive from anyone, at once\")\ncli = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\nn = cli.sendto(b\"QUOTE? AAPL\", srv.getsockname())\nsay(\"cli.sendto(b'QUOTE? AAPL', (host, port))\", f\"{n} B sent; the OS gave cli a port on first send\")\ndata, addr = srv.recvfrom(2048)\nsay(\"data, addr = srv.recvfrom(2048)\", f\"{data!r} from the client's port: {addr[1] == cli.getsockname()[1]}\")\nsrv.sendto(b\"AAPL 185.48/185.50\", addr)                              # reply to whoever asked\nsay(\"srv.sendto(reply, addr)\", f\"client gets {cli.recvfrom(2048)[0]!r}\")\ncli.sendto(b\"0123456789\", srv.getsockname())\nsay(\"recvfrom(4) on a 10-byte datagram\", f\"{srv.recvfrom(4)[0]!r}: the rest is discarded, size buffers for the largest\")\ncli.connect(srv.getsockname())\ncli.send(b\"connected UDP\")\nsay(\"cli.connect(addr); cli.send(...)\", f\"just a default peer, no handshake: {srv.recvfrom(2048)[0]!r}\")\n\nprint(\"blocking modes: what recv() does when nothing has arrived\")\nsrv.setblocking(True)\nsrv.settimeout(0.05)\nt = time.perf_counter()\ntry:\n    srv.recvfrom(2048)\nexcept TimeoutError:\n    say(\"settimeout(0.05); recvfrom()\", f\"TimeoutError, after at least 50 ms: {time.perf_counter() - t >= 0.045}\")\nsrv.setblocking(False)\ntry:\n    srv.recvfrom(2048)\nexcept BlockingIOError as e:\n    say(\"setblocking(False); recvfrom()\", f\"BlockingIOError at once (errno {errno.errorcode[e.errno]}): poll again later\")\nsrv.settimeout(None)\nsay(\"settimeout(None)\", \"blocking again: recv waits forever (the default)\")\n\nprint(\"readiness: one thread watching many sockets (what an event loop does underneath)\")\nfeeds = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(3)]\nfor f in feeds:\n    f.bind((\"127.0.0.1\", 0)); f.setblocking(False)\ncli2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\ncli2.sendto(b\"tick B\", feeds[1].getsockname())\ncli2.sendto(b\"tick C\", feeds[2].getsockname())\ntime.sleep(0.02)\nready, _, _ = select.select(feeds, [], [], 0.1)\nsay(\"select.select([A, B, C], [], [], 0.1)\", f\"ready: {['ABC'[feeds.index(s)] for s in ready]}\")\nfor s in ready:\n    say(f\"  feed {'ABC'[feeds.index(s)]}.recvfrom()\", repr(s.recvfrom(2048)[0]))\nready, _, _ = select.select(feeds, [], [], 0.05)\nsay(\"select again, nothing sent\", f\"ready: {ready} after the 50 ms timeout\")\nfor s in feeds + [cli, cli2, srv]:\n    s.close()\n",
+            "output": "UDP: no listen, no accept, no connection\n  srv = socket(AF_INET, SOCK_DGRAM); bind()  ready to receive from anyone, at once\n  cli.sendto(b'QUOTE? AAPL', (host, port))   11 B sent; the OS gave cli a port on first send\n  data, addr = srv.recvfrom(2048)            b'QUOTE? AAPL' from the client's port: True\n  srv.sendto(reply, addr)                    client gets b'AAPL 185.48/185.50'\n  recvfrom(4) on a 10-byte datagram          b'0123': the rest is discarded, size buffers for the largest\n  cli.connect(addr); cli.send(...)           just a default peer, no handshake: b'connected UDP'\nblocking modes: what recv() does when nothing has arrived\n  settimeout(0.05); recvfrom()               TimeoutError, after at least 50 ms: True\n  setblocking(False); recvfrom()             BlockingIOError at once (errno EAGAIN): poll again later\n  settimeout(None)                           blocking again: recv waits forever (the default)\nreadiness: one thread watching many sockets (what an event loop does underneath)\n  select.select([A, B, C], [], [], 0.1)      ready: ['B', 'C']\n    feed B.recvfrom()                        b'tick B'\n    feed C.recvfrom()                        b'tick C'\n  select again, nothing sent                 ready: [] after the 50 ms timeout"
+          }
+        },
+        {
+          "name": "A TCP echo server and client in two processes, with length-prefix framing",
+          "explain": "<p>Here server and client are two operating-system processes, started from one file with <code>multiprocessing</code>. The server process calls <code>socket.create_server((\"127.0.0.1\", 0))</code>, which is <code>socket</code>, <code>SO_REUSEADDR</code>, <code>bind</code> and <code>listen</code> in one call. It reports its ephemeral port back through a queue and blocks in <code>accept()</code>. The client connects and sets <code>TCP_NODELAY</code>, and the two speak a framed protocol: every message is a 4-byte big-endian length followed by that many bytes of JSON, and a length of zero means goodbye. The server echoes each message back, inside an envelope with its own sequence number.</p><p>Framing is needed because TCP is a byte stream, and the client tests it on purpose. It writes three orders in a single <code>sendall</code>, so one server read may hold all three, then writes the fourth in 7-byte pieces with pauses, so the server sees fragments. <code>recv_exact</code> handles both: it loops until it has exactly <code>n</code> bytes, because <code>recv(n)</code> may return fewer, and raises if the peer closes in the middle of a message. The output shows four echoes, in order, each identical to what was sent, and a server process that exits with status 0 after the goodbye.</p><p>Three habits carry straight into the arena and into any exchange gateway. Loop on <code>recv</code> until a whole message is in hand. Give the protocol an explicit end, here the zero length, so that a clean shutdown can be told apart from a crash. And put the length first: a reader that knows the size before it reads can bound its buffer and reject an absurd length, instead of scanning untrusted bytes for a delimiter.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport multiprocessing as mp\nimport os\nimport socket\nimport struct\nimport time\n\nHDR = struct.Struct(\"!I\")                       # 4-byte big-endian length before every message\n\ndef recv_exact(sock, n):\n    buf = b\"\"\n    while len(buf) < n:\n        chunk = sock.recv(n - len(buf))\n        if not chunk:\n            raise ConnectionError(\"peer closed mid-message\")\n        buf += chunk\n    return buf\n\ndef recv_msg(sock):\n    (n,) = HDR.unpack(recv_exact(sock, HDR.size))\n    return recv_exact(sock, n) if n else None    # length 0 = \"goodbye\"\n\ndef frame(obj):\n    body = json.dumps(obj, separators=(\",\", \":\")).encode()\n    return HDR.pack(len(body)) + body\n\ndef echo_server(port_q):\n    \"\"\"Runs in its OWN process: socket, bind, listen, accept one client, echo every message back.\"\"\"\n    with socket.create_server((\"127.0.0.1\", 0)) as lst:       # socket() + SO_REUSEADDR + bind() + listen()\n        port_q.put((lst.getsockname()[1], os.getpid()))\n        conn, _ = lst.accept()\n        with conn:\n            seq = 0\n            while (raw := recv_msg(conn)) is not None:\n                seq += 1\n                conn.sendall(frame({\"seq\": seq, \"echo\": json.loads(raw)}))\n\nif __name__ == \"__main__\":\n    q = mp.Queue()\n    server = mp.Process(target=echo_server, args=(q,))\n    server.start()\n    port, server_pid = q.get(timeout=10)\n    print(f\"server runs in another process: {server_pid != os.getpid()}; \"\n          f\"listening on an OS-assigned ephemeral port: {port > 1023}\")\n    with socket.create_connection((\"127.0.0.1\", port)) as c:\n        c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\n        orders = [{\"type\": \"place_order\", \"symbol\": s, \"side\": \"buy\", \"quantity\": 5} for s in\n                  (\"AAPL\", \"MSFT\", \"NVDA\", \"AMZN\")]\n        c.sendall(frame(orders[0]) + frame(orders[1]) + frame(orders[2]))   # three messages, ONE write\n        whole = frame(orders[3])\n        for i in range(0, len(whole), 7):                                    # one message, many writes\n            c.sendall(whole[i:i + 7])\n            time.sleep(0.002)\n        for sent in orders:\n            reply = json.loads(recv_msg(c))\n            print(f\"  echo seq={reply['seq']} {reply['echo']['symbol']:<4} identical to what was sent: {reply['echo'] == sent}\")\n        c.sendall(HDR.pack(0))                                               # orderly goodbye\n    server.join(timeout=5)\n    print(f\"server exited cleanly: {server.exitcode == 0}\")\n",
+            "output": "server runs in another process: True; listening on an OS-assigned ephemeral port: True\n  echo seq=1 AAPL identical to what was sent: True\n  echo seq=2 MSFT identical to what was sent: True\n  echo seq=3 NVDA identical to what was sent: True\n  echo seq=4 AMZN identical to what was sent: True\nserver exited cleanly: True"
+          }
+        },
+        {
+          "name": "A UDP quote server and client in two processes: timeouts, retries and request ids by hand",
+          "explain": "<p>The UDP version is the same exercise without a connection, so the client must supply the reliability that TCP gave the previous one. The server process binds one datagram socket and loops on <code>recvfrom</code>. Each request is one JSON datagram carrying a request id and a symbol; each answer is one datagram sent back to the address the request came from. There is no accept and no per-client socket: one socket serves every client.</p><p>The script loses the server's reply to request 2 once, standing in for a dropped datagram. The client sends each request, sets a 200 ms timeout and waits. Requests 1 and 3 are answered at the first attempt. For request 2 the timeout fires, the client sends the same request again with the same id, and this time the answer arrives. The server has seen id 2 before, so it returns the stored answer instead of executing the request twice: its statistics show three requests served and one retry answered from the cache. The client also ignores any reply whose id is not the one it is waiting for, because a late answer to an older request can turn up at any moment.</p><p>Timeouts, retransmission, request ids and duplicate suppression are what TCP does inside the kernel, rebuilt here in about twenty lines. For a quote request that is a fair trade. For an order it is not: a retry that is not idempotent can buy twice. That is why order entry runs on TCP with session sequence numbers, and why every order carries a client order id (FIX tag 11) that the venue uses to reject duplicates.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport multiprocessing as mp\nimport os\nimport socket\n\nQUOTES = {\"AAPL\": (185.48, 185.50), \"MSFT\": (411.20, 411.24), \"NVDA\": (122.05, 122.07)}\n\ndef quote_server(port_q, drop_first_of):\n    \"\"\"Its OWN process: one UDP socket, no connections; answer each request datagram with one reply.\"\"\"\n    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n    s.bind((\"127.0.0.1\", 0))\n    port_q.put((s.getsockname()[1], os.getpid()))\n    seen, served, from_cache, dropped = {}, 0, 0, False\n    while True:\n        raw, addr = s.recvfrom(2048)\n        req = json.loads(raw)\n        if req[\"type\"] == \"bye\":\n            s.sendto(json.dumps({\"served\": served, \"retries_from_cache\": from_cache}).encode(), addr)\n            break\n        if req[\"id\"] in seen:                           # a retry: same answer again, NOT a second execution\n            reply = seen[req[\"id\"]]\n            from_cache += 1\n        else:\n            bid, ask = QUOTES.get(req[\"symbol\"], (None, None))\n            served += 1\n            reply = json.dumps({\"id\": req[\"id\"], \"symbol\": req[\"symbol\"], \"bid\": bid, \"ask\": ask,\n                                \"served\": served}).encode()\n            seen[req[\"id\"]] = reply\n            if req[\"id\"] == drop_first_of and not dropped:\n                dropped = True                          # simulate the REPLY being lost on the way back\n                continue\n        s.sendto(reply, addr)\n    s.close()\n\ndef ask(sock, server, req_id, symbol, timeout=0.2, tries=3):\n    msg = json.dumps({\"type\": \"quote\", \"id\": req_id, \"symbol\": symbol}).encode()\n    for attempt in range(1, tries + 1):\n        sock.sendto(msg, server)\n        sock.settimeout(timeout)\n        try:\n            while True:\n                raw, _ = sock.recvfrom(2048)\n                rep = json.loads(raw)\n                if rep[\"id\"] == req_id:                 # ignore a late answer to an older request\n                    return rep, attempt\n        except TimeoutError:\n            print(f\"  request {req_id} ({symbol}): no reply within {timeout * 1000:.0f} ms, attempt {attempt} -> resend\")\n    return None, tries\n\nif __name__ == \"__main__\":\n    q = mp.Queue()\n    server = mp.Process(target=quote_server, args=(q, 2))       # the reply to request 2 is lost once\n    server.start()\n    port, pid = q.get(timeout=10)\n    print(f\"UDP quote server in another process: {pid != os.getpid()}, port is ephemeral: {port > 1023}\")\n    c = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n    for req_id, sym in enumerate((\"AAPL\", \"MSFT\", \"NVDA\"), start=1):\n        rep, attempts = ask(c, (\"127.0.0.1\", port), req_id, sym)\n        print(f\"  request {req_id} ({sym}) -> bid {rep['bid']} ask {rep['ask']} after {attempts} attempt(s); \"\n              f\"server has served {rep['served']} distinct request(s)\")\n    c.sendto(json.dumps({\"type\": \"bye\"}).encode(), (\"127.0.0.1\", port))\n    c.settimeout(2)\n    print(\"server stats:\", json.loads(c.recvfrom(2048)[0]))\n    c.close()\n    server.join(timeout=5)\n    print(f\"server exited cleanly: {server.exitcode == 0}\")\n    print(\"the reliability here (timeout, resend, request id, de-duplication) was written by hand: UDP gives none of it\")\n",
+            "output": "UDP quote server in another process: True, port is ephemeral: True\n  request 1 (AAPL) -> bid 185.48 ask 185.5 after 1 attempt(s); server has served 1 distinct request(s)\n  request 2 (MSFT): no reply within 200 ms, attempt 1 -> resend\n  request 2 (MSFT) -> bid 411.2 ask 411.24 after 2 attempt(s); server has served 2 distinct request(s)\n  request 3 (NVDA) -> bid 122.05 ask 122.07 after 1 attempt(s); server has served 3 distinct request(s)\nserver stats: {'served': 3, 'retries_from_cache': 1}\nserver exited cleanly: True\nthe reliability here (timeout, resend, request id, de-duplication) was written by hand: UDP gives none of it"
+          }
+        },
+        {
+          "name": "FIX: tag=value messages, header, body and trailer, the session layer, NewOrderSingle and ExecutionReport",
+          "explain": "<p>FIX, the Financial Information eXchange protocol, has carried orders between brokers, buy-side firms and venues since the 1990s, usually over a plain TCP connection. A message is a flat list of <code>tag=value</code> fields separated by the SOH byte (0x01, printed as | here), in three parts. The <strong>header</strong> opens with <code>8=FIX.4.4</code> and <code>9=</code>, the BodyLength in bytes from the next field up to the checksum, then <code>35</code> MsgType, <code>49</code> and <code>56</code> sender and target, <code>34</code> MsgSeqNum and <code>52</code> SendingTime. The <strong>body</strong> holds the business fields. The <strong>trailer</strong> is <code>10=</code>, the byte sum modulo 256 in three digits. The snippet builds and verifies a Logon (35=A, heartbeat interval 108=30), a NewOrderSingle (35=D: client order id 11, symbol 55, side 54=1 for buy, quantity 38=5, limit 40=2 at price 44), and the venue's two ExecutionReports (35=8): ExecType 150=0, New, with LeavesQty 151=5, then 150=F, a trade, with CumQty 14=5 and OrdStatus 39=2, filled. Changing one digit of the quantity breaks the checksum.</p><p>FIX's real contribution is its <strong>session layer</strong>, a layer-5 protocol carried inside the messages. Each side numbers what it sends and checks what it receives. The venue in the snippet expects 6, receives 8, and sends a ResendRequest (35=2 with 7=6 and 16=0, from 6 to the end). The client resends 6 with PossDupFlag 43=Y, so that it cannot be taken for a new order, and replaces 7, a heartbeat not worth resending, with a SequenceReset in gap-fill mode (35=4, 123=Y, 36=8). Then 8 is processed, in order. Silence is handled the same way: no traffic for one heartbeat interval triggers a TestRequest (35=1), and no Heartbeat (35=0) in reply means the session is dead.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\n\nSOH = \"\\x01\"\n\ndef fix(msg_type, seq, body, sender=\"TEAM07\", target=\"ARENA\", when=\"20261016-14:30:00.000\"):\n    \"\"\"Build a FIX 4.4 message: BodyLength (9) counts the bytes after itself up to the checksum\n    field; CheckSum (10) is the byte sum mod 256, three digits.\"\"\"\n    fields = [(\"35\", msg_type), (\"49\", sender), (\"56\", target), (\"34\", str(seq)), (\"52\", when)] + body\n    inner = \"\".join(f\"{t}={v}{SOH}\" for t, v in fields)\n    head = f\"8=FIX.4.4{SOH}9={len(inner)}{SOH}\"\n    cks = sum((head + inner).encode()) % 256\n    return f\"{head}{inner}10={cks:03d}{SOH}\"\n\ndef parse(raw):\n    pairs = [f.split(\"=\", 1) for f in raw.split(SOH) if f]\n    tags = dict(pairs)\n    body_start = raw.index(f\"{SOH}35=\") + 1\n    trailer = raw.rindex(f\"{SOH}10=\") + 1\n    ok_len = int(tags[\"9\"]) == len(raw[body_start:trailer].encode())\n    ok_sum = int(tags[\"10\"]) == sum(raw[:trailer].encode()) % 256\n    return tags, ok_len and ok_sum\n\nshow = lambda raw: raw.replace(SOH, \"|\")\nNAMES = {\"A\": \"Logon\", \"D\": \"NewOrderSingle\", \"8\": \"ExecutionReport\", \"0\": \"Heartbeat\",\n         \"1\": \"TestRequest\", \"2\": \"ResendRequest\", \"4\": \"SequenceReset\"}\n\nlogon = fix(\"A\", 1, [(\"98\", \"0\"), (\"108\", \"30\")])                 # no encryption, 30 s heartbeat\norder = fix(\"D\", 2, [(\"11\", \"ord-0001\"), (\"55\", \"AAPL\"), (\"54\", \"1\"), (\"38\", \"5\"),\n                     (\"40\", \"2\"), (\"44\", \"185.49\"), (\"59\", \"0\")])  # buy 5 AAPL limit 185.49, day\nfor raw in (logon, order):\n    tags, ok = parse(raw)\n    print(f\"{NAMES[tags['35']]:<15} {len(raw):3d} B  valid={ok}  {show(raw)}\")\n# the venue answers with ExecutionReports (35=8): first \"New\", then a fill\nfor exec_type, status, last_qty, cum, leaves in ((\"0\", \"0\", 0, 0, 5), (\"F\", \"2\", 5, 5, 0)):\n    er = fix(\"8\", 2 if exec_type == \"0\" else 3, [(\"37\", \"V-77812\"), (\"11\", \"ord-0001\"), (\"17\", f\"E{exec_type}1\"),\n             (\"150\", exec_type), (\"39\", status), (\"55\", \"AAPL\"), (\"54\", \"1\"), (\"38\", \"5\"),\n             (\"32\", str(last_qty)), (\"31\", \"185.49\" if last_qty else \"0\"), (\"14\", str(cum)), (\"151\", str(leaves)),\n             (\"6\", \"185.49\" if cum else \"0\")], sender=\"ARENA\", target=\"TEAM07\")\n    tags, ok = parse(er)\n    what = {\"0\": \"New: the order rests\", \"F\": \"Trade: filled 5 @ 185.49\"}[tags[\"150\"]]\n    print(f\"{'ExecutionReport':<15} {len(er):3d} B  valid={ok}  150={tags['150']} 39={tags['39']} \"\n          f\"14={tags['14']} 151={tags['151']}  -> {what}\")\ntampered = order.replace(\"38=5\", \"38=9\")\nprint(f\"{'tampered qty':<15} {len(tampered):3d} B  valid={parse(tampered)[1]}  (checksum catches it)\")\n\n# the session layer: every message carries MsgSeqNum (34); a gap triggers a ResendRequest\nprint(\"session, venue side: expecting seq 5\")\nexpected, log = 5, []\nfor seq, kind in ((5, \"D\"), (8, \"D\")):                         # 6 and 7 never arrived\n    if seq > expected:\n        req = fix(\"2\", 41, [(\"7\", str(expected)), (\"16\", \"0\")], sender=\"ARENA\", target=\"TEAM07\")\n        log.append(f\"  got 34={seq}, expected {expected} -> ResendRequest 7={expected} 16=0 (BeginSeqNo, 0 = to the end)\")\n        log.append(f\"     {show(req)}\")\n        break\n    log.append(f\"  got 34={seq} {NAMES[kind]} -> accepted\")\n    expected = seq + 1\nprint(\"\\n\".join(log))\nreplay = [fix(\"D\", 6, [(\"43\", \"Y\"), (\"122\", \"20261016-14:30:00.000\"), (\"11\", \"ord-0006\"), (\"55\", \"MSFT\"),\n                       (\"54\", \"2\"), (\"38\", \"3\"), (\"40\", \"1\")]),\n          fix(\"4\", 7, [(\"43\", \"Y\"), (\"123\", \"Y\"), (\"36\", \"8\")])]   # 7 was a heartbeat: skip it\nfor raw in replay:\n    t, ok = parse(raw)\n    extra = \" PossDupFlag=Y (resent)\" if t[\"35\"] == \"D\" else \" GapFill to NewSeqNo=8 (admin msg not resent)\"\n    print(f\"  client resends 34={t['34']} {NAMES[t['35']]}{extra}  valid={ok}\")\nprint(\"  then 34=8 is processed; the stream is whole again\")\n\n# heartbeats: silence for HeartBtInt -> TestRequest; no Heartbeat back -> the session is dead\nhb = 30\nfor silent in (12, 31, 62):\n    act = \"nothing\" if silent < hb else (\"send TestRequest 112=TR1\" if silent < 2 * hb else \"disconnect, log out\")\n    print(f\"  {silent:2d} s since last message from peer -> {act}\")\n",
+            "output": "Logon            88 B  valid=True  8=FIX.4.4|9=66|35=A|49=TEAM07|56=ARENA|34=1|52=20261016-14:30:00.000|98=0|108=30|10=225|\nNewOrderSingle  127 B  valid=True  8=FIX.4.4|9=104|35=D|49=TEAM07|56=ARENA|34=2|52=20261016-14:30:00.000|11=ord-0001|55=AAPL|54=1|38=5|40=2|44=185.49|59=0|10=211|\nExecutionReport 161 B  valid=True  150=0 39=0 14=0 151=5  -> New: the order rests\nExecutionReport 171 B  valid=True  150=F 39=2 14=5 151=0  -> Trade: filled 5 @ 185.49\ntampered qty    127 B  valid=False  (checksum catches it)\nsession, venue side: expecting seq 5\n  got 34=5 NewOrderSingle -> accepted\n  got 34=8, expected 6 -> ResendRequest 7=6 16=0 (BeginSeqNo, 0 = to the end)\n     8=FIX.4.4|9=64|35=2|49=ARENA|56=TEAM07|34=41|52=20261016-14:30:00.000|7=6|16=0|10=107|\n  client resends 34=6 NewOrderSingle PossDupFlag=Y (resent)  valid=True\n  client resends 34=7 SequenceReset GapFill to NewSeqNo=8 (admin msg not resent)  valid=True\n  then 34=8 is processed; the stream is whole again\n  12 s since last message from peer -> nothing\n  31 s since last message from peer -> send TestRequest 112=TR1\n  62 s since last message from peer -> disconnect, log out"
+          }
+        },
+        {
+          "name": "ITCH over MoldUDP64, OUCH, and a note on SBE, FAST and MDP 3.0: binary market data and order entry",
+          "explain": "<p>Exchange feeds drop text altogether. NASDAQ's TotalView-<strong>ITCH</strong> is the canonical binary market-data protocol: every message has a one-byte type and fields at fixed offsets, big-endian, with no names and no delimiters. An Add Order (type A) is 36 bytes: stock locate, tracking number, a 6-byte timestamp in nanoseconds since midnight, the order reference number, B or S, shares, the symbol padded to 8 bytes, and the price as an integer with four implied decimals. The snippet decodes one: buy 500 AAPL at 185.4900 at 09:30:00.000000123. Order Cancel (X) and Order Executed (E) then shrink a resting order by its reference number; from such deltas the receiver builds the book itself.</p><p>ITCH travels inside <strong>MoldUDP64</strong> over UDP multicast. Each packet carries a 10-byte session, the 64-bit sequence number of its first message and a message count, then each message behind a 2-byte length. In the snippet the second packet starts at 1004 when 1003 was expected. The handler holds it, marks the book stale, asks the re-request server for 1003, applies 1003 and then 1004, and only then trusts the book again. Venues also publish each feed twice, on A and B lines over separate paths, so most gaps are filled from the other line without asking.</p><p><strong>OUCH</strong> is the order-entry side: fixed binary messages over a TCP session (SoupBinTCP). An Enter Order (O) is 49 bytes: a 14-byte order token, side, shares, stock, price, time in force, firm and flags. CME's <strong>MDP 3.0</strong> feed is encoded in <strong>SBE</strong>, Simple Binary Encoding: an 8-byte header naming the template and schema version, then a little-endian block read in place. Its predecessor <strong>FAST</strong> compressed FIX with stop-bit integers and deltas. One add order is 36 bytes in ITCH, 28 in this SBE layout and 110 as JSON.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport struct\n\n# ---- ITCH 5.0 (market data, venue -> everyone): fixed offsets, big-endian, no field names ----\nADD = struct.Struct(\"!cHH6sQcI8sI\")              # 'A' Add Order: 36 bytes\nEXE = struct.Struct(\"!cHH6sQIQ\")                 # 'E' Order Executed: 31 bytes\nCXL = struct.Struct(\"!cHH6sQI\")                  # 'X' Order Cancel: 23 bytes\ndef ts6(ns):\n    return ns.to_bytes(6, \"big\")                 # nanoseconds since midnight in 48 bits\ndef add_order(ref, side, shares, stock, px, ns):\n    return ADD.pack(b\"A\", 13, 0, ts6(ns), ref, side, shares, stock.ljust(8).encode(), round(px * 10_000))\ndef executed(ref, shares, match, ns):\n    return EXE.pack(b\"E\", 13, 0, ts6(ns), ref, shares, match)\n\nT0 = 34_200_000_000_123                          # 09:30:00.000000123\nmsgs = [add_order(880_001, b\"B\", 500, \"AAPL\", 185.49, T0), add_order(880_002, b\"S\", 300, \"AAPL\", 185.51, T0 + 900),\n        CXL.pack(b\"X\", 13, 0, ts6(T0 + 4_100), 880_002, 100), executed(880_001, 200, 51_001, T0 + 5_400)]\nraw = msgs[0]\nprint(f\"ITCH Add Order, {len(raw)} B on the wire: {raw.hex(' ')}\")\nt, loc, trk, ts, ref, side, sh, stock, px = ADD.unpack(raw)\nns = int.from_bytes(ts, \"big\")\nprint(f\"  type={t.decode()} locate={loc} time={ns // 3_600_000_000_000:02d}:{ns // 60_000_000_000 % 60:02d}:\"\n      f\"{ns // 1_000_000_000 % 60:02d}.{ns % 1_000_000_000:09d} ref={ref} side={side.decode()} shares={sh} \"\n      f\"stock={stock.decode().strip()} price={px} -> {px / 10_000:.4f} (4 implied decimals)\")\n\n# ---- MoldUDP64: the session wrapper that carries ITCH over UDP multicast ----\nHDR = struct.Struct(\"!10sQH\")                    # session, sequence number of the FIRST message, count\ndef mold(session, seq, messages):\n    return HDR.pack(session, seq, len(messages)) + b\"\".join(struct.pack(\"!H\", len(m)) + m for m in messages)\ndef unmold(pkt):\n    session, seq, count = HDR.unpack_from(pkt)\n    off, out = HDR.size, []\n    for k in range(count):\n        (n,) = struct.unpack_from(\"!H\", pkt, off)\n        out.append((seq + k, pkt[off + 2:off + 2 + n]))\n        off += 2 + n\n    return session, out\n\ndef apply(book, m):\n    kind = m[:1]\n    if kind == b\"A\":\n        _, _, _, _, ref, side, sh, stock, px = ADD.unpack(m)\n        book[ref] = f\"{side.decode()} {sh} @ {px / 10_000:.2f}\"\n    else:\n        ref, sh = (EXE.unpack(m)[4:6] if kind == b\"E\" else CXL.unpack(m)[4:6])\n        side, left, _, px = book[ref].split()\n        book[ref] = f\"{side} {int(left) - sh} @ {px}\"\n    return f\"{kind.decode()} on {ref}\"\n\nSESSION = b\"20261016A1\"\npackets = [mold(SESSION, 1001, msgs[:2]), mold(SESSION, 1004, msgs[3:])]   # the packet with 1003 was lost\nexpected, book, held = 1001, {}, []\nfor pkt in packets:\n    session, items = unmold(pkt)\n    print(f\"MoldUDP64 packet {len(pkt)} B: session {session.decode()}, first seq {items[0][0]}, {len(items)} message(s)\")\n    for seq, m in items:\n        if seq > expected:\n            held.append((seq, m))\n            print(f\"  seq {seq}: GAP, expected {expected} -> hold it, mark the book stale, re-request {expected}..{seq - 1}\")\n            continue\n        print(f\"  seq {seq}: apply {apply(book, m)} -> {book}\")\n        expected = seq + 1\n_, resent = unmold(mold(SESSION, 1003, msgs[2:3]))                      # the re-request server's answer\nfor seq, m in resent + held:\n    print(f\"  seq {seq}: apply {apply(book, m)} -> {book}\")\n    expected = seq + 1\nprint(f\"  stream whole again at {expected - 1}; only now may the strategy trust the book\")\n\n# ---- OUCH 4.2 (order entry, you -> venue): the same style, sent over a TCP session (SoupBinTCP) ----\nENTER = struct.Struct(\"!c14scI8sII4scccIcc\")       # 'O' Enter Order: 49 bytes\no = ENTER.pack(b\"O\", b\"TEAM07-000001\".ljust(14), b\"B\", 500, b\"AAPL\".ljust(8), 1_854_900, 99_998, b\"TM07\",\n               b\"Y\", b\"A\", b\"N\", 0, b\"N\", b\"R\")\nf = ENTER.unpack(o)\nprint(f\"OUCH Enter Order {len(o)} B: token={f[1].decode().strip()} {f[2].decode()} {f[3]} {f[4].decode().strip()} \"\n      f\"@ {f[5] / 10_000} tif={f[6]} (99998 = market hours; 0 = IOC) firm={f[7].decode()}\")\n\n# ---- SBE (CME MDP 3.0): an 8-byte header names the template; the block is read in place ----\nSBE_HDR, BODY = struct.Struct(\"<HHHH\"), struct.Struct(\"<qiiB3x\")\nbody = BODY.pack(185_490_000_000, 500, 4321, 1)                       # price mantissa (exp -9), qty, security id, side\nsbe = SBE_HDR.pack(BODY.size, 46, 1, 9) + body\nbl, tid, sid, ver = SBE_HDR.unpack_from(sbe)\nprint(f\"SBE message {len(sbe)} B: blockLength {bl}, templateId {tid}, schema {sid} v{ver}, \"\n      f\"price {BODY.unpack_from(sbe, 8)[0] * 1e-9:.2f} (little-endian, fixed offsets)\")\n\nas_json = json.dumps({\"type\": \"add_order\", \"ref\": 880001, \"side\": \"buy\", \"shares\": 500, \"symbol\": \"AAPL\",\n                      \"price\": 185.49, \"ts\": T0}, separators=(\",\", \":\"))\nprint(f\"one add-order: ITCH {len(raw)} B | SBE {len(sbe)} B | JSON {len(as_json)} B\")\n",
+            "output": "ITCH Add Order, 36 B on the wire: 41 00 0d 00 00 1f 1a ce d9 f0 7b 00 00 00 00 00 0d 6d 81 42 00 00 01 f4 41 41 50 4c 20 20 20 20 00 1c 4d b4\n  type=A locate=13 time=09:30:00.000000123 ref=880001 side=B shares=500 stock=AAPL price=1854900 -> 185.4900 (4 implied decimals)\nMoldUDP64 packet 96 B: session 20261016A1, first seq 1001, 2 message(s)\n  seq 1001: apply A on 880001 -> {880001: 'B 500 @ 185.49'}\n  seq 1002: apply A on 880002 -> {880001: 'B 500 @ 185.49', 880002: 'S 300 @ 185.51'}\nMoldUDP64 packet 53 B: session 20261016A1, first seq 1004, 1 message(s)\n  seq 1004: GAP, expected 1003 -> hold it, mark the book stale, re-request 1003..1003\n  seq 1003: apply X on 880002 -> {880001: 'B 500 @ 185.49', 880002: 'S 200 @ 185.51'}\n  seq 1004: apply E on 880001 -> {880001: 'B 300 @ 185.49', 880002: 'S 200 @ 185.51'}\n  stream whole again at 1004; only now may the strategy trust the book\nOUCH Enter Order 49 B: token=TEAM07-000001 B 500 AAPL @ 185.49 tif=99998 (99998 = market hours; 0 = IOC) firm=TM07\nSBE message 28 B: blockLength 20, templateId 46, schema 1 v9, price 185.49 (little-endian, fixed offsets)\none add-order: ITCH 36 B | SBE 28 B | JSON 110 B"
+          }
+        },
+        {
+          "name": "WebSocket, last: the HTTP upgrade, frames, ping/pong, close codes, and the arena mapped onto the week",
+          "explain": "<p>WebSocket (RFC 6455) is the protocol the arena speaks, and it starts as HTTP on a TCP connection. The client sends a <code>GET</code> with <code>Upgrade: websocket</code>, <code>Connection: Upgrade</code>, <code>Sec-WebSocket-Version: 13</code> and a <code>Sec-WebSocket-Key</code> of 16 random bytes. The server answers <code>101 Switching Protocols</code> with <code>Sec-WebSocket-Accept</code>, base64(SHA-1(key + a fixed GUID)), which the snippet recomputes. From then on the connection carries <strong>frames</strong> both ways: a first byte holding FIN and the opcode (0x1 text, 0x2 binary, 0x8 close, 0x9 ping, 0xA pong), a second holding the mask bit and the length (2 or 8 more bytes for long messages), and, from client to server only, a 4-byte masking key XORed over the payload.</p><p><strong>Ping and pong</strong> are the liveness check, answered by the peer's library without your code; <code>websockets</code> pings every 20 seconds by default and drops a peer that stays silent. Closing is a handshake too: the close frame carries a 2-byte code. 1000 is normal closure; 1001 going away, 1002 protocol error, 1008 policy violation, 1009 message too big and 1011 server error are sent by peers. 1006 is never sent: it is reported when the connection died without a close frame, as on the snippet's third connection.</p><p>The snippet runs a stub of the arena with <code>serve</code> and a bot with <code>connect</code>. As on the real exchange, the first message must be a <code>handshake</code> with team, role and level, or the venue answers <code>EXPECTED_HANDSHAKE</code> and closes. The table at the end maps the arena onto the week: TCP underneath, the handshake for a Logon, ping for Heartbeat, <code>place_order</code> for NewOrderSingle, <code>order_ack</code> and <code>trade_execution</code> for ExecutionReport, full snapshots instead of ITCH deltas, and a reconnect with a fresh snapshot instead of a ResendRequest, because inside one TCP connection nothing goes missing.</p>",
+          "code": {
+            "lang": "python",
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport asyncio\nimport base64\nimport hashlib\nimport json\n\ntry:\n    import websockets\n    from websockets.asyncio.client import connect\n    from websockets.asyncio.server import serve\n    from websockets.exceptions import ConnectionClosed\n    from websockets.frames import Close, Frame, Opcode\nexcept ImportError:\n    websockets = None\n\nGUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\"                  # fixed by RFC 6455\n\nasync def venue(ws):\n    \"\"\"A stub of the arena's exchange: the first message must be a handshake, then JSON both ways.\"\"\"\n    first = json.loads(await ws.recv())\n    if first.get(\"type\") != \"handshake\":\n        await ws.send(json.dumps({\"type\": \"error\", \"code\": \"EXPECTED_HANDSHAKE\",\n                                  \"message\": \"First message must be a Handshake\"}))\n        return                                                   # returning closes the socket: code 1000\n    for bid in (185.48, 185.49):\n        await ws.send(json.dumps({\"type\": \"book_snapshot\", \"symbol\": \"AAPL\", \"bids\": [[bid, 300]],\n                                  \"asks\": [[round(bid + 0.02, 2), 200]]}))\n    async for raw in ws:\n        msg = json.loads(raw)\n        if msg[\"type\"] == \"place_order\":\n            await ws.send(json.dumps({\"type\": \"order_ack\", \"order_id\": \"V-1\", \"symbol\": msg[\"symbol\"],\n                                      \"side\": msg[\"side\"], \"price\": msg[\"price\"], \"quantity\": msg[\"quantity\"]}))\n        elif msg[\"type\"] == \"crash_me\":\n            ws.transport.abort()                                 # the process dies: no close frame is sent\n            return\n\nasync def bot(url):\n    async with connect(url) as ws:\n        rq, rs = ws.request, ws.response\n        print(f\"GET {rq.path} HTTP/1.1   Upgrade: {rq.headers['Upgrade']}   Connection: {rq.headers['Connection']}   \"\n              f\"Sec-WebSocket-Version: {rq.headers['Sec-WebSocket-Version']}\")\n        key = rq.headers[\"Sec-WebSocket-Key\"]\n        print(f\"  Sec-WebSocket-Key: {len(base64.b64decode(key))} random bytes, base64 (new on every connect)\")\n        accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()\n        print(f\"HTTP/1.1 {rs.status_code} {rs.reason_phrase}   Sec-WebSocket-Accept = base64(SHA-1(key + GUID)): \"\n              f\"{rs.headers['Sec-WebSocket-Accept'] == accept}\")\n        await ws.send(json.dumps({\"type\": \"handshake\", \"team_id\": \"TEAM07\", \"role\": \"trader\", \"level\": 1}))\n        for _ in range(2):\n            m = json.loads(await ws.recv())\n            print(f\"  <- {m['type']:<14} bid {m['bids'][0]} ask {m['asks'][0]}\")\n        await ws.send(json.dumps({\"type\": \"place_order\", \"team_id\": \"TEAM07\", \"symbol\": \"AAPL\", \"side\": \"buy\",\n                                  \"order_type\": \"limit\", \"price\": 185.49, \"quantity\": 5}))\n        m = json.loads(await ws.recv())\n        print(f\"  <- {m['type']:<14} {m['order_id']} {m['side']} {m['quantity']} {m['symbol']} @ {m['price']}\")\n        rtt = await (await ws.ping())                            # opcode 0x9 out, 0xA back\n        print(f\"  ping -> pong answered by the peer's library: {rtt < 0.05}\")\n    print(f\"  closed by us: code {ws.close_code} (normal closure)\")\n\n    async with connect(url) as ws:                               # break the protocol: no handshake first\n        await ws.send(json.dumps({\"type\": \"place_order\", \"symbol\": \"AAPL\"}))\n        err = json.loads(await ws.recv())\n        await ws.wait_closed()\n        print(f\"  no handshake -> error {err['code']}, then closed by the venue: code {ws.close_code}\")\n\n    async with connect(url) as ws:                               # the peer vanishes without a closing handshake\n        await ws.send(json.dumps({\"type\": \"handshake\", \"team_id\": \"TEAM07\", \"role\": \"trader\", \"level\": 1}))\n        await ws.recv(); await ws.recv()\n        await ws.send(json.dumps({\"type\": \"crash_me\"}))\n        try:\n            await ws.recv()\n        except ConnectionClosed as e:\n            print(f\"  peer died -> {type(e).__name__}, code {ws.close_code} (abnormal: no close frame received)\")\n\ndef show_frames():\n    text = Frame(Opcode.TEXT, b'{\"type\":\"order_ack\"}').serialize(mask=False, extensions=[])\n    ping = Frame(Opcode.PING, b\"\").serialize(mask=False, extensions=[])\n    close = Frame(Opcode.CLOSE, Close(1000, \"\").serialize()).serialize(mask=False, extensions=[])\n    for name, f in ((\"text frame (server)\", text), (\"ping\", ping), (\"close 1000\", close)):\n        print(f\"  {name:<20} {f[:2].hex(' '):<6}{('+ ' + f[2:].hex(' ')) if name == 'close 1000' else '':<10} FIN={f[0] >> 7} opcode=0x{f[0] & 0x0F:x} \"\n              f\"MASK={f[1] >> 7} len={f[1] & 0x7F}\")\n    body = b'{\"type\":\"place_order\"}'\n    masked = Frame(Opcode.TEXT, body).serialize(mask=True, extensions=[])\n    print(f\"  text frame (client)  {masked[:2].hex(' ')} + 4-byte mask key + XOR-masked payload: \"\n          f\"{len(masked)} B for a {len(body)}-byte message\")\n\nasync def main():\n    async with serve(venue, \"127.0.0.1\", 0) as server:\n        await bot(f\"ws://127.0.0.1:{server.sockets[0].getsockname()[1]}\")\n\nif websockets is None:\n    print(\"websockets is not installed: pip install websockets\")\nelse:\n    print(\"websockets\", websockets.__version__)\n    asyncio.run(main())\n    print(\"frames on the wire:\")\n    show_frames()\n    print(\"the arena's JSON over WebSocket, against the protocols of this week:\")\n    for row in ((\"transport\", \"TCP, ws:// on 8765 (wss:// adds TLS)\", \"FIX/OUCH on TCP, ITCH on UDP multicast\"),\n                (\"session start\", \"handshake {team_id, role, level}, 15 s\", \"FIX Logon 35=A, SoupBinTCP login\"),\n                (\"liveness\", \"ping/pong frames, every 20 s by default\", \"FIX Heartbeat 35=0, TestRequest 35=1\"),\n                (\"order entry\", \"place_order, cancel_order\", \"NewOrderSingle 35=D, OUCH 'O'\"),\n                (\"order state\", \"order_ack, queue_update, trade_execution\", \"ExecutionReport 35=8\"),\n                (\"market data\", \"book_snapshot: the whole book each time\", \"ITCH A/E/X deltas + snapshot\"),\n                (\"rejects\", \"error {code, message}\", \"Reject 35=3\"),\n                (\"gap recovery\", \"reconnect, re-handshake, next snapshot\", \"ResendRequest 35=2, re-request\"),\n                (\"encoding\", \"JSON text frames\", \"tag=value text; binary ITCH, SBE\")):\n        print(f\"  {row[0]:<14}{row[1]:<43}{row[2]}\")\n",
+            "output": "websockets 15.0.1\nGET / HTTP/1.1   Upgrade: websocket   Connection: Upgrade   Sec-WebSocket-Version: 13\n  Sec-WebSocket-Key: 16 random bytes, base64 (new on every connect)\nHTTP/1.1 101 Switching Protocols   Sec-WebSocket-Accept = base64(SHA-1(key + GUID)): True\n  <- book_snapshot  bid [185.48, 300] ask [185.5, 200]\n  <- book_snapshot  bid [185.49, 300] ask [185.51, 200]\n  <- order_ack      V-1 buy 5 AAPL @ 185.49\n  ping -> pong answered by the peer's library: True\n  closed by us: code 1000 (normal closure)\n  no handshake -> error EXPECTED_HANDSHAKE, then closed by the venue: code 1000\n  peer died -> ConnectionClosedError, code 1006 (abnormal: no close frame received)\nframes on the wire:\n  text frame (server)  81 14            FIN=1 opcode=0x1 MASK=0 len=20\n  ping                 89 00            FIN=1 opcode=0x9 MASK=0 len=0\n  close 1000           88 02 + 03 e8    FIN=1 opcode=0x8 MASK=0 len=2\n  text frame (client)  81 96 + 4-byte mask key + XOR-masked payload: 28 B for a 22-byte message\nthe arena's JSON over WebSocket, against the protocols of this week:\n  transport     TCP, ws:// on 8765 (wss:// adds TLS)       FIX/OUCH on TCP, ITCH on UDP multicast\n  session start handshake {team_id, role, level}, 15 s     FIX Logon 35=A, SoupBinTCP login\n  liveness      ping/pong frames, every 20 s by default    FIX Heartbeat 35=0, TestRequest 35=1\n  order entry   place_order, cancel_order                  NewOrderSingle 35=D, OUCH 'O'\n  order state   order_ack, queue_update, trade_execution   ExecutionReport 35=8\n  market data   book_snapshot: the whole book each time    ITCH A/E/X deltas + snapshot\n  rejects       error {code, message}                      Reject 35=3\n  gap recovery  reconnect, re-handshake, next snapshot     ResendRequest 35=2, re-request\n  encoding      JSON text frames                           tag=value text; binary ITCH, SBE"
+          }
+        }
+      ],
+      "widget": [
+        {
+          "type": "osi-stack",
+          "title": "The seven layers: click one, then send a message down one stack and up the other",
+          "after": 2,
+          "params": {
+            "layers": [
+              {
+                "n": 7,
+                "name": "Application",
+                "examples": "HTTP, WebSocket, FIX, DNS",
+                "pdu": "data",
+                "job": "Gives programs a shared language for what a message means: an order, a quote, a web page.",
+                "header": {
+                  "proto": "WebSocket frame header",
+                  "short": "WS",
+                  "fields": [
+                    {
+                      "f": "FIN + opcode",
+                      "b": 1
+                    },
+                    {
+                      "f": "MASK + length",
+                      "b": 1
+                    },
+                    {
+                      "f": "masking key",
+                      "b": 4
+                    }
+                  ]
+                },
+                "protocols": "HTTP, WebSocket, FIX messages, DNS, ITCH, OUCH",
+                "devices": "Hosts; L7 load balancers and API gateways (they read the request), web application firewalls",
+                "note": "The arena's JSON messages, FIX tag=value and ITCH or OUCH binary messages all live here."
+              },
+              {
+                "n": 6,
+                "name": "Presentation",
+                "examples": "TLS, JSON, SBE",
+                "pdu": "data",
+                "job": "Decides how the data is represented: character encoding, serialisation, compression and encryption.",
+                "header": {
+                  "proto": "TLS 1.3 record",
+                  "short": "TLS",
+                  "fields": [
+                    {
+                      "f": "content type",
+                      "b": 1
+                    },
+                    {
+                      "f": "version",
+                      "b": 2
+                    },
+                    {
+                      "f": "length",
+                      "b": 2
+                    }
+                  ],
+                  "trailer": [
+                    {
+                      "f": "auth tag",
+                      "b": 16
+                    }
+                  ]
+                },
+                "protocols": "TLS (encryption), UTF-8 and JSON, SBE, FAST, protobuf",
+                "devices": "Hosts; TLS-terminating load balancers and reverse proxies",
+                "note": "JSON is text that describes itself; ITCH and SBE are fixed-offset binary, decoded in place. The arena's ws:// carries no TLS; wss:// would add this record."
+              },
+              {
+                "n": 5,
+                "name": "Session",
+                "examples": "TLS session, FIX session",
+                "pdu": "data",
+                "job": "Keeps a conversation alive between two programs: open it, authenticate, checkpoint, resume.",
+                "header": {
+                  "proto": "",
+                  "fields": []
+                },
+                "protocols": "TLS handshake and resumption, the FIX session layer (Logon, Heartbeat, ResendRequest), SoupBinTCP, MoldUDP64",
+                "devices": "Hosts only",
+                "note": "In the Internet stack this layer adds no header of its own: FIX carries its session fields (34 MsgSeqNum, 52 SendingTime, 108 HeartBtInt) inside every message."
+              },
+              {
+                "n": 4,
+                "name": "Transport",
+                "examples": "TCP, UDP",
+                "pdu": "segment",
+                "job": "Delivers bytes from one program to another by port, as a reliable ordered stream (TCP) or as independent datagrams (UDP).",
+                "header": {
+                  "proto": "TCP header",
+                  "short": "TCP",
+                  "fields": [
+                    {
+                      "f": "src port",
+                      "b": 2
+                    },
+                    {
+                      "f": "dst port",
+                      "b": 2
+                    },
+                    {
+                      "f": "sequence",
+                      "b": 4
+                    },
+                    {
+                      "f": "ack",
+                      "b": 4
+                    },
+                    {
+                      "f": "offset + flags",
+                      "b": 2
+                    },
+                    {
+                      "f": "window",
+                      "b": 2
+                    },
+                    {
+                      "f": "checksum",
+                      "b": 2
+                    },
+                    {
+                      "f": "urgent",
+                      "b": 2
+                    }
+                  ]
+                },
+                "protocols": "TCP, UDP (whose PDU is the datagram, header 8 B), QUIC on top of UDP",
+                "devices": "The hosts' kernels; stateful firewalls and NAT routers (they track ports); L4 load balancers",
+                "note": "Order entry (FIX, OUCH, the arena's WebSocket) runs on TCP; market data on UDP multicast."
+              },
+              {
+                "n": 3,
+                "name": "Network",
+                "examples": "IP, ICMP, ARP",
+                "pdu": "packet",
+                "job": "Moves a packet from host to host across networks, hop by hop, by IP address.",
+                "header": {
+                  "proto": "IPv4 header",
+                  "short": "IPv4",
+                  "fields": [
+                    {
+                      "f": "version + IHL",
+                      "b": 1
+                    },
+                    {
+                      "f": "DSCP / ECN",
+                      "b": 1
+                    },
+                    {
+                      "f": "total length",
+                      "b": 2
+                    },
+                    {
+                      "f": "identification",
+                      "b": 2
+                    },
+                    {
+                      "f": "flags + fragment",
+                      "b": 2
+                    },
+                    {
+                      "f": "TTL",
+                      "b": 1
+                    },
+                    {
+                      "f": "protocol",
+                      "b": 1
+                    },
+                    {
+                      "f": "checksum",
+                      "b": 2
+                    },
+                    {
+                      "f": "source IP",
+                      "b": 4
+                    },
+                    {
+                      "f": "destination IP",
+                      "b": 4
+                    }
+                  ]
+                },
+                "protocols": "IPv4, IPv6, ICMP (ping, traceroute), IGMP (multicast joins); ARP maps IP to MAC between L2 and L3",
+                "devices": "Routers, layer-3 switches, firewalls that filter by address",
+                "note": "Every router decrements the TTL and recomputes the checksum; the addresses stay the same end to end unless NAT rewrites them."
+              },
+              {
+                "n": 2,
+                "name": "Data link",
+                "examples": "Ethernet, Wi-Fi",
+                "pdu": "frame",
+                "job": "Moves a frame across one link to the next device, by MAC address, and drops frames that arrive damaged.",
+                "header": {
+                  "proto": "Ethernet II header",
+                  "short": "Eth",
+                  "fields": [
+                    {
+                      "f": "dst MAC",
+                      "b": 6
+                    },
+                    {
+                      "f": "src MAC",
+                      "b": 6
+                    },
+                    {
+                      "f": "EtherType",
+                      "b": 2
+                    }
+                  ],
+                  "trailer": [
+                    {
+                      "f": "FCS",
+                      "b": 4
+                    }
+                  ]
+                },
+                "protocols": "Ethernet (802.3), Wi-Fi (802.11), VLAN tags (802.1Q)",
+                "devices": "Switches, bridges, Wi-Fi access points, the NIC",
+                "note": "A switch learns which MAC lives behind which port and forwards to that port only; a colo switch adds well under a microsecond per hop."
+              },
+              {
+                "n": 1,
+                "name": "Physical",
+                "examples": "copper, fibre, radio",
+                "pdu": "bits",
+                "job": "Turns bits into signals on a medium and back: voltage on copper, light in fibre, radio in the air.",
+                "header": {
+                  "proto": "Ethernet preamble",
+                  "short": "Pre",
+                  "fields": [
+                    {
+                      "f": "preamble",
+                      "b": 7
+                    },
+                    {
+                      "f": "start delimiter",
+                      "b": 1
+                    }
+                  ]
+                },
+                "protocols": "1000BASE-T, 10GBASE-SR, 802.11 radio (OFDM), line coding",
+                "devices": "NIC transceiver, cables, fibre and optics, repeaters, hubs, media converters",
+                "note": "Serialising a 1,518-byte frame takes 12.3 µs at 1 Gb/s and 1.2 µs at 10 Gb/s, before any distance."
+              }
+            ],
+            "message": {
+              "label": "JSON order",
+              "bytes": 118
+            },
+            "select": 4,
+            "step_ms": 900
+          }
+        },
+        {
+          "type": "tcp-vs-udp",
+          "title": "TCP against UDP on one timeline: handshake, a lost packet, retransmission against fire-and-forget",
+          "after": 3,
+          "params": {
+            "rtt": 20,
+            "msgs": 6,
+            "gap": 4,
+            "loss": true,
+            "seed": 33503
+          }
+        }
+      ],
+      "pitfalls": [
+        "Treating one recv() as one message. TCP is a byte stream: frame every message, for instance with a length prefix, loop until it is whole, and treat an empty read as the peer closing.",
+        "Treating a UDP feed as reliable. Without sequence checks, A/B arbitration and a re-request or snapshot path, one lost datagram leaves a wrong book that no later message repairs.",
+        "Blocking sockets with no timeout, and order sockets with Nagle on. Set a timeout or run non-blocking under an event loop, set TCP_NODELAY on order entry, and SO_REUSEADDR on servers.",
+        "After a reconnect, resetting FIX sequence numbers, or resending an order without PossDupFlag and its original ClOrdID. Recover the gap instead: a blind retry can trade twice."
+      ],
+      "check": [
+        {
+          "q": "A frame from your laptop crosses a switch and then a router on its way to the venue. What does each device do to it?",
+          "options": [
+            "The switch rewrites the IP addresses; the router rewrites the TCP ports",
+            "The switch forwards on the destination MAC and rewrites nothing; the router reads the IP address, builds a new layer-2 header and decrements the TTL",
+            "Both decrypt the TLS record to find the destination",
+            "Neither reads any header; only the two endpoints do"
+          ],
+          "answer": 1,
+          "why": "A switch is a layer-2 device that learns and forwards by MAC. A router works at layer 3: new link header each hop, TTL minus one, addresses kept."
+        },
+        {
+          "q": "Why do exchanges publish market data over UDP multicast but take orders over TCP?",
+          "options": [
+            "UDP is encrypted and TCP is not",
+            "One multicast datagram reaches every subscriber with no handshake and no head-of-line blocking, and sequence numbers expose losses; an order must arrive exactly once and in order, which TCP guarantees",
+            "TCP cannot carry binary messages",
+            "UDP guarantees delivery for packets under 1,500 bytes"
+          ],
+          "answer": 1,
+          "why": "Stale market data is worth little and losses are recovered by sequence number; a lost or reordered order is a real position, so it needs TCP."
+        },
+        {
+          "q": "A server's handler does msg = json.loads(conn.recv(4096)). It passes every test on a laptop and fails in production with JSONDecodeError. Why, and what is the fix?",
+          "options": [
+            "4096 is too small: use recv(65536)",
+            "The client should call send() rather than sendall()",
+            "recv returns up to 4096 bytes of a byte stream, which may be part of a message or several glued together; frame messages with a length prefix and loop until exactly that many bytes are in",
+            "Switch to UDP and change nothing else"
+          ],
+          "answer": 2,
+          "why": "TCP keeps no message boundaries, as the echo snippet shows: one write may arrive in pieces, three may arrive as one. recv_exact plus a length prefix fixes it."
+        },
+        {
+          "q": "Your bot's WebSocket to the arena dies (close code 1006) and reconnects. A FIX client would send a ResendRequest. What does the arena's protocol rely on instead?",
+          "options": [
+            "Nothing: WebSocket retransmits lost frames across connections",
+            "Ask the venue to replay messages by sequence number",
+            "Send the handshake again and rebuild state from the next full book_snapshot, since the arena sends whole snapshots, not sequenced deltas",
+            "Keep the old book, since only new trades matter"
+          ],
+          "answer": 2,
+          "why": "Inside one TCP connection nothing is lost; across a reconnect the arena has no MsgSeqNum to resend, so full snapshots make the restart self-healing."
+        }
+      ]
+    },
+    {
+      "n": 4,
+      "title": "Session 3 · asyncio and socket streaming: one event loop, typed WebSocket schemas, heartbeats, reconnection",
+      "topics": [
+        "asyncio: coroutines, tasks, gather and the event loop; concurrency is not parallelism",
+        "asyncio.Queue: producer/consumer, backpressure and conflation; never block the loop",
+        "races between awaits, locks, cancellation and reconnection with backoff",
+        "sockets, request/response, streaming and pub/sub",
+        "why WebSockets rather than HTTP polling; the upgrade handshake",
+        "framing and serialisation: where a message ends",
+        "a protocol is a versioned contract: schemas, discriminated unions, validation at the boundary",
+        "malformed and unknown messages; heartbeats, sequence numbers and reconnection",
+        "capability you leave with: typed WebSocket schemas, heartbeats, reconnection"
       ],
       "concepts": [
         {
           "name": "Concurrency is structure, parallelism is execution: what gather really buys",
-          "explain": "<p>asyncio gives you concurrency on one thread: many tasks in progress, interleaved at every <code>await</code>. It does not give you parallelism, work happening at the same instant on several cores. That is the right tool for a trading bot, whose time goes on waiting for sockets, and the wrong one for number crunching. The snippet shows both halves. Calling a coroutine function runs nothing; it returns a coroutine object that only executes when awaited or wrapped in a task. Three waits of 30, 20 and 10 ms awaited one after another take the sum, at least 60 ms; the same three under <code>asyncio.gather</code> take roughly the longest one, finish in the order <code>order, quote, feed</code>, and still return their results in argument order.</p><p>The last line is the caveat that the GIL enforces: three CPU-bound coroutines under <code>gather</code> run back to back, because a coroutine that never awaits never yields. Threads would not help either, since only one thread executes Python bytecode at a time; CPU work that must go faster goes to processes (week 6).</p><p>In the lab this is step 1 (<em>Where is the loop? Ask the code</em>), where you find the two <code>create_task</code> calls in the engine's <code>run()</code>, and step 2 (<em>Concurrency is not parallelism, prove it</em>), the same three-call experiment at full scale: 3 s under <code>gather</code> against 6 s in sequence. In the arena your <code>on_tick</code> is the synchronous step in the middle of the trading-loop task, called every half second; the listen task is the one that keeps your view of the book current.</p>",
+          "explain": "<p>asyncio gives you concurrency on one thread: many tasks in progress, interleaved at every <code>await</code>. It does not give you parallelism, work happening at the same instant on several cores. That is the right tool for a trading bot, whose time goes on waiting for sockets, and the wrong one for number crunching. The snippet shows both halves. Calling a coroutine function runs nothing; it returns a coroutine object that only executes when awaited or wrapped in a task. Three waits of 30, 20 and 10 ms awaited one after another take the sum, at least 60 ms; the same three under <code>asyncio.gather</code> take roughly the longest one, finish in the order <code>order, quote, feed</code>, and still return their results in argument order.</p><p>The last line is the caveat that the GIL enforces: three CPU-bound coroutines under <code>gather</code> run back to back, because a coroutine that never awaits never yields. Threads would not help either, since only one thread executes Python bytecode at a time; CPU work that must go faster goes to processes (week 2).</p><p>In the lab this is step 1 (<em>Where is the loop? Ask the code</em>), where you find the two <code>create_task</code> calls in the engine's <code>run()</code>, and step 2 (<em>Concurrency is not parallelism, prove it</em>), the same three-call experiment at full scale: 3 s under <code>gather</code> against 6 s in sequence. In the arena your <code>on_tick</code> is the synchronous step in the middle of the trading-loop task, called every half second; the listen task is the one that keeps your view of the book current.</p>",
           "code": {
             "lang": "python",
             "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport asyncio\nimport time\n\nlog = []\n\nasync def call(name, seconds):\n    log.append(f\"start {name}\")\n    await asyncio.sleep(seconds)          # waiting on \"the network\": the loop runs others\n    log.append(f\"done  {name}\")\n    return name\n\nasync def main():\n    c = call(\"feed\", 0.03)\n    print(\"calling a coroutine function returns:\", type(c).__name__, \"- nothing has run:\", log == [])\n    c.close()                             # tidy up the never-awaited coroutine\n\n    t = time.perf_counter()\n    for name, s in ((\"feed\", 0.03), (\"quote\", 0.02), (\"order\", 0.01)):\n        await call(name, s)               # one after another\n    seq = time.perf_counter() - t\n    order_seq = list(log)\n    log.clear()\n\n    t = time.perf_counter()\n    res = await asyncio.gather(call(\"feed\", 0.03), call(\"quote\", 0.02), call(\"order\", 0.01))\n    conc = time.perf_counter() - t\n    print(\"sequential order :\", [x for x in order_seq if x.startswith(\"done\")])\n    print(\"gather order     :\", [x for x in log if x.startswith(\"done\")])\n    print(\"gather results   :\", res, \"(in argument order, not finish order)\")\n    print(\"sequential >= sum of waits (60 ms) :\", seq >= 0.058)\n    print(\"gather well under the sum (< 45 ms):\", 0.029 < conc < 0.045 or conc < 0.75 * seq)\n\nasyncio.run(main())\n\n# CPU work does not overlap on one thread: the loop can only interleave at awaits\nasync def crunch(n):\n    return sum(i * i for i in range(n))\n\nasync def cpu_main():\n    return await asyncio.gather(*(crunch(200_000) for _ in range(3)))\n\nprint(\"CPU-bound gather still runs the three sums back to back:\", len(asyncio.run(cpu_main())), \"results\")\n",
@@ -605,7 +1025,7 @@ window.COURSES["FINM 33500"] = {
         },
         {
           "name": "Sockets drop: catch the close, reset state, back off with jitter, cancel cleanly",
-          "explain": "<p>A live connection will close under you: the venue restarts, the wifi blinks, a proxy times out. The loop that survives has four parts. It catches the close <em>around</em> the read loop rather than inside the handler; it throws away the old book on every reconnect, because a stale book is worse than none; it waits before retrying, doubling the delay after each consecutive failure up to a cap and multiplying by random jitter so a hundred clients do not reconnect in the same millisecond; and it resets the backoff once a connection is healthy again.</p><p>The snippet scripts a venue that drops at messages 4 and 9 and refuses three connection attempts after the second drop. The bot logs each failure, backs off 0.78, 1.35, 2.74, 2.16 and 8.59 ms (seeded jitter on a doubling schedule, scaled down from the seconds a real client uses), and ends with its twelve messages over six connects. Note that messages 4 and 9 never arrived: a reconnect restores the stream, not the gap, which is why week 3 adds sequence numbers and snapshots. The second half is supervision: <code>task.cancel()</code> raises <code>CancelledError</code> inside the task at its next await, the task runs its cleanup (here, cancelling resting orders) and re-raises, and the supervisor confirms a clean exit.</p><p>In the lab this is step 7 (<em>Survive a drop</em>, the sentence \"this is what kills student bots\"): you kill a local exchange and watch your bot log the reconnect and re-handshake by itself. In the arena the venue also cancels your resting orders when your socket closes, so a reconnecting bot starts flat on the book even though its position carried over.</p>",
+          "explain": "<p>A live connection will close under you: the venue restarts, the wifi blinks, a proxy times out. The loop that survives has four parts. It catches the close <em>around</em> the read loop rather than inside the handler; it throws away the old book on every reconnect, because a stale book is worse than none; it waits before retrying, doubling the delay after each consecutive failure up to a cap and multiplying by random jitter so a hundred clients do not reconnect in the same millisecond; and it resets the backoff once a connection is healthy again.</p><p>The snippet scripts a venue that drops at messages 4 and 9 and refuses three connection attempts after the second drop. The bot logs each failure, backs off 0.78, 1.35, 2.74, 2.16 and 8.59 ms (seeded jitter on a doubling schedule, scaled down from the seconds a real client uses), and ends with its twelve messages over six connects. Note that messages 4 and 9 never arrived: a reconnect restores the stream, not the gap, which is why the last concept of this week adds sequence numbers and snapshots. The second half is supervision: <code>task.cancel()</code> raises <code>CancelledError</code> inside the task at its next await, the task runs its cleanup (here, cancelling resting orders) and re-raises, and the supervisor confirms a clean exit.</p><p>In the lab this is step 7 (<em>Survive a drop</em>, the sentence \"this is what kills student bots\"): you kill a local exchange and watch your bot log the reconnect and re-handshake by itself. In the arena the venue also cancels your resting orders when your socket closes, so a reconnecting bot starts flat on the book even though its position carried over.</p>",
           "code": {
             "lang": "python",
             "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport asyncio\nimport random\n\nclass ConnectionClosed(Exception):\n    pass\n\nclass FlakyVenue:\n    \"\"\"Drops the socket at scripted moments; refuses connects while it is 'down'.\"\"\"\n    def __init__(self, drops, down_attempts):\n        self.drops, self.down, self.attempt, self.msg = set(drops), down_attempts, 0, 0\n    async def connect(self):\n        self.attempt += 1\n        if self.attempt in self.down:\n            raise OSError(\"connect refused\")\n        return self\n    async def recv(self):\n        await asyncio.sleep(0)\n        self.msg += 1\n        if self.msg in self.drops:\n            raise ConnectionClosed(f\"dropped at message {self.msg}\")\n        return {\"type\": \"book_snapshot\", \"n\": self.msg}\n\nasync def run_bot(venue, want=12, base=0.001, cap=0.016, seed=33503):\n    rng, got, delays, cleanups = random.Random(seed), 0, [], 0\n    failures = 0\n    while got < want:\n        try:\n            ws = await venue.connect()\n            failures = 0                                 # healthy again: reset the backoff\n            book = {}                                    # stale books are worse than none\n            while got < want:\n                m = await ws.recv()\n                book[m[\"n\"]] = m\n                got += 1\n        except (ConnectionClosed, OSError) as e:\n            failures += 1\n            d = min(cap, base * 2 ** (failures - 1)) * (0.5 + rng.random())   # expo + jitter\n            delays.append(round(d * 1000, 2))\n            print(f\"  {type(e).__name__:<16} {str(e):<22} -> retry #{failures} in {d * 1000:5.2f} ms\")\n            await asyncio.sleep(d)\n        finally:\n            cleanups += 1\n    return got, delays, cleanups\n\nvenue = FlakyVenue(drops={4, 9}, down_attempts={3, 4, 5})\ngot, delays, cleanups = asyncio.run(run_bot(venue))\nprint(f\"received {got} messages over {venue.attempt} connects; backoff (ms) {delays}\")\n\n# supervision: cancel a task and let it clean up\nasync def quoting(log):\n    try:\n        while True:\n            await asyncio.sleep(0.001)\n    except asyncio.CancelledError:\n        log.append(\"cancel resting orders\")          # cleanup runs, then re-raise\n        raise\n\nasync def supervisor():\n    log = []\n    t = asyncio.create_task(quoting(log))\n    await asyncio.sleep(0.01)\n    t.cancel()\n    try:\n        await t\n    except asyncio.CancelledError:\n        log.append(\"task cancelled cleanly\")\n    return log\n\nprint(\"supervisor:\", asyncio.run(supervisor()))\n",
@@ -613,84 +1033,48 @@ window.COURSES["FINM 33500"] = {
           }
         },
         {
-          "name": "OSI's seven layers and TCP/IP's four: encapsulation, byte by byte",
-          "explain": "<p>The OSI model splits networking into seven layers: physical, data link, network, transport, session, presentation and application. The Internet runs on a four-layer model, link, internet (IP), transport (TCP or UDP) and application, with OSI's top three folded into one. The names matter less than the principle both share: each layer puts its own header in front of the data it is handed and talks only to the same layer on the other side. That is encapsulation, and the receiver undoes it in reverse.</p><p>The snippet builds a real frame for one arena order. The 78-byte JSON message is the application payload. TCP prepends 20 bytes (ports 51514 and 8765, sequence and acknowledgement numbers, the PSH and ACK flags). IPv4 prepends 20 more: addresses, TTL 64, protocol 6 for TCP, and a header checksum computed with the RFC 1071 algorithm. Ethernet prepends 14: two MAC addresses and the type 0x0800 for IPv4. The 132-byte frame is 59% order and 41% envelope, before the preamble and the frame check sequence. Decapsulation reads the same bytes back at fixed offsets, and the checksum verifies.</p><p>Two numbers to keep. The MTU, the largest IP packet a link carries, is 1,500 bytes on Ethernet, so a TCP segment holds at most 1,460 bytes of payload (the MSS), or 18 of these orders. And the layers are a model, not a law: TLS sits between TCP and HTTP, WebSocket frames add 2 to 14 bytes of their own, Wi-Fi uses an 802.11 header in the air that the access point swaps for Ethernet, and FIX defines its own session layer with logons and sequence numbers. The packet-journey widget below walks one message across those hops.</p>",
+          "name": "TCP hands you bytes, not messages: framing with a delimiter or a length prefix",
+          "explain": "<p>TCP guarantees that bytes arrive complete and in order. It guarantees nothing about where one message ends: two <code>sendall</code> calls can arrive as one <code>recv</code>, and one message can arrive across three. The snippet takes two 41-byte JSON orders and shows both failures of the naive reader, <code>json.loads(recv())</code>: the coalesced 82 bytes raise <em>Extra data</em>, and the split version raises on its first fragment.</p><p>The two classic fixes are a delimiter and a length prefix. A delimiter reader appends every chunk to a buffer, splits on the separator and keeps the incomplete tail for next time; it needs a separator that cannot occur inside a message, which newline-delimited JSON satisfies. A length-prefix reader waits until it has four bytes of big-endian length plus that many bytes of body; it works for any payload, including binary, and is what most exchange protocols use. The snippet feeds both readers the same stream cut three ways, whole, at arbitrary offsets and one byte at a time, and both recover <code>['AAPL', 'MSFT']</code> every time. A reader that is correct only for the chunking your laptop happens to produce is not correct.</p><p>In the lab this is step 1 (<em>TCP has no messages, only bytes</em>): <code>framing.py</code> delays the server's first read so both sends pile up, and you name the two fixes at the checkpoint. In the arena you never write this reader, because WebSocket framing (next concept) does it for you, but the same bug reappears whenever someone reads a raw TCP feed or tails a log file mid-write.</p>",
           "code": {
             "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport ipaddress\nimport json\nimport struct\n\ndef checksum16(data: bytes) -> int:\n    \"\"\"The Internet checksum (RFC 1071): one's-complement sum of 16-bit words.\"\"\"\n    if len(data) % 2:\n        data += b\"\\0\"\n    s = sum(struct.unpack(f\"!{len(data) // 2}H\", data))\n    while s >> 16:\n        s = (s & 0xFFFF) + (s >> 16)\n    return ~s & 0xFFFF\n\npayload = json.dumps({\"type\": \"place_order\", \"symbol\": \"AAPL\", \"side\": \"buy\",\n                      \"quantity\": 5, \"price\": 185.5}, separators=(\",\", \":\")).encode()      # L7\nsrc, dst = ipaddress.IPv4Address(\"192.168.1.23\"), ipaddress.IPv4Address(\"203.0.113.10\")\ntcp = struct.pack(\"!HHIIBBHHH\", 51514, 8765, 1_000_001, 7_000_001, 5 << 4, 0x18, 65535, 0, 0)  # L4: PSH+ACK\nip = struct.pack(\"!BBHHHBBH4s4s\", 0x45, 0, 20 + len(tcp) + len(payload), 0x1c46, 0x4000, 64, 6, 0,\n                 src.packed, dst.packed)                                                      # L3\nip = ip[:10] + struct.pack(\"!H\", checksum16(ip)) + ip[12:]\neth = bytes.fromhex(\"f0b3ec112233\") + bytes.fromhex(\"a4c3f0445566\") + struct.pack(\"!H\", 0x0800)  # L2\nframe = eth + ip + tcp + payload\n\nprint(\"encapsulation, outermost first:\")\nfor name, part in ((\"L2 Ethernet header\", eth), (\"L3 IPv4 header\", ip), (\"L4 TCP header\", tcp),\n                   (\"L7 JSON payload\", payload)):\n    print(f\"  {name:<20} {len(part):3d} B  {part[:12].hex(' ')}{' ...' if len(part) > 12 else ''}\")\nprint(f\"  frame on the wire    {len(frame):3d} B  (+4 B FCS, +20 B preamble and gap) -> \"\n      f\"{len(payload) / len(frame):.0%} of it is your order\")\n\n# the receiver peels the layers off in the opposite order\nethertype = struct.unpack(\"!H\", frame[12:14])[0]\nihl = (frame[14] & 0x0F) * 4\nttl, proto = frame[22], frame[23]\ns_ip, d_ip = ipaddress.IPv4Address(frame[26:30]), ipaddress.IPv4Address(frame[30:34])\nsport, dport, seq, ack, off_flags = struct.unpack(\"!HHIIH\", frame[14 + ihl:14 + ihl + 14])\nbody = frame[14 + ihl + (off_flags >> 12) * 4:]\nprint(\"decapsulation:\")\nprint(f\"  L2 ethertype 0x{ethertype:04x} (IPv4) | L3 {s_ip} -> {d_ip} ttl={ttl} proto={proto} (TCP) \"\n      f\"checksum ok={checksum16(frame[14:14 + ihl]) == 0}\")\nprint(f\"  L4 port {sport} -> {dport} seq={seq} ack={ack} flags=PSH|ACK | L7 {json.loads(body)['type']}\")\nmss = 1500 - 20 - 20\nprint(f\"MTU 1500 -> MSS {mss}: up to {mss // len(payload)} such orders fit in one segment\")\n\nlayers = [(\"7 Application\", \"Application\", \"HTTP, WebSocket, FIX, DNS\"),\n          (\"6 Presentation\", \"Application\", \"TLS, JSON / SBE encoding\"),\n          (\"5 Session\", \"Application\", \"FIX logon + seq numbers\"),\n          (\"4 Transport\", \"Transport\", \"TCP, UDP (ports)\"),\n          (\"3 Network\", \"Internet\", \"IP (addresses, routing)\"),\n          (\"2 Data link\", \"Link\", \"Ethernet, 802.11 Wi-Fi (MAC)\"),\n          (\"1 Physical\", \"Link\", \"copper, fibre, radio\")]\nprint(\"OSI 7            TCP/IP 4      examples\")\nfor osi, tcpip, ex in layers:\n    print(f\"{osi:<17}{tcpip:<14}{ex}\")\n",
-            "output": "encapsulation, outermost first:\n  L2 Ethernet header    14 B  f0 b3 ec 11 22 33 a4 c3 f0 44 55 66 ...\n  L3 IPv4 header        20 B  45 00 00 76 1c 46 40 00 40 06 20 72 ...\n  L4 TCP header         20 B  c9 3a 22 3d 00 0f 42 41 00 6a cf c1 ...\n  L7 JSON payload       78 B  7b 22 74 79 70 65 22 3a 22 70 6c 61 ...\n  frame on the wire    132 B  (+4 B FCS, +20 B preamble and gap) -> 59% of it is your order\ndecapsulation:\n  L2 ethertype 0x0800 (IPv4) | L3 192.168.1.23 -> 203.0.113.10 ttl=64 proto=6 (TCP) checksum ok=True\n  L4 port 51514 -> 8765 seq=1000001 ack=7000001 flags=PSH|ACK | L7 place_order\nMTU 1500 -> MSS 1460: up to 18 such orders fit in one segment\nOSI 7            TCP/IP 4      examples\n7 Application    Application   HTTP, WebSocket, FIX, DNS\n6 Presentation   Application   TLS, JSON / SBE encoding\n5 Session        Application   FIX logon + seq numbers\n4 Transport      Transport     TCP, UDP (ports)\n3 Network        Internet      IP (addresses, routing)\n2 Data link      Link          Ethernet, 802.11 Wi-Fi (MAC)\n1 Physical       Link          copper, fibre, radio"
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport struct\n\nm1 = json.dumps({\"type\": \"place_order\", \"symbol\": \"AAPL\"}).encode()\nm2 = json.dumps({\"type\": \"place_order\", \"symbol\": \"MSFT\"}).encode()\n\n# what TCP may deliver for two sendall() calls: any re-chunking of the same bytes\nstream = m1 + m2\nchunkings = {\"coalesced\": [stream], \"split\": [stream[:20], stream[20:61], stream[61:]]}\nfor name, chunks in chunkings.items():\n    print(f\"{name:<10} recv sizes {[len(c) for c in chunks]}\")\n    try:\n        print(\"   naive json.loads(recv) ->\", [json.loads(c)[\"symbol\"] for c in chunks])\n    except json.JSONDecodeError as e:\n        print(\"   naive json.loads(recv) -> JSONDecodeError:\", e.msg)\n\ndef delimited(chunks, sep=b\"\\n\"):\n    \"\"\"Fix 1: a delimiter. Buffer, split, keep the incomplete tail.\"\"\"\n    buf, out = b\"\", []\n    for c in chunks:\n        buf += c\n        *whole, buf = buf.split(sep)\n        out += [json.loads(w)[\"symbol\"] for w in whole]\n    return out\n\ndef length_prefixed(chunks):\n    \"\"\"Fix 2: a 4-byte big-endian length before every message.\"\"\"\n    buf, out = b\"\", []\n    for c in chunks:\n        buf += c\n        while len(buf) >= 4 and len(buf) >= 4 + struct.unpack(\">I\", buf[:4])[0]:\n            n = struct.unpack(\">I\", buf[:4])[0]\n            out.append(json.loads(buf[4:4 + n])[\"symbol\"])\n            buf = buf[4 + n:]\n    return out\n\nnl = m1 + b\"\\n\" + m2 + b\"\\n\"\nlp = struct.pack(\">I\", len(m1)) + m1 + struct.pack(\">I\", len(m2)) + m2\nfor cuts in ([len(nl)], [7, 30, 58], [1] * 10):\n    parts, i = [], 0\n    for k in cuts:\n        parts.append(nl[i:i + k]); i += k\n    parts.append(nl[i:])\n    lparts, i = [], 0\n    for k in cuts:\n        lparts.append(lp[i:i + k]); i += k\n    lparts.append(lp[i:])\n    print(f\"cuts {str(cuts):<32} delimiter -> {delimited(parts)}   length-prefix -> {length_prefixed(lparts)}\")\n",
+            "output": "coalesced  recv sizes [82]\n   naive json.loads(recv) -> JSONDecodeError: Extra data\nsplit      recv sizes [20, 41, 21]\n   naive json.loads(recv) -> JSONDecodeError: Unterminated string starting at\ncuts [84]                             delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']\ncuts [7, 30, 58]                      delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']\ncuts [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]   delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']"
           }
         },
         {
-          "name": "You connect to the Wi-Fi: everything that happens before your first WebSocket message",
-          "explain": "<p>Open the laptop at the start of class and run the bot. Before one byte of market data arrives, eight protocols run in order, each solving one problem. <strong>Association</strong>: the laptop scans, authenticates and associates with the access point at layer 2, then the WPA2 or WPA3 four-way handshake derives the keys that encrypt the radio link. <strong>DHCP</strong>: the laptop has no IP address yet, so it broadcasts a UDP Discover from port 68 to port 67; the router offers an address, the laptop requests it and the router acknowledges, handing over the address, the subnet mask, the default gateway and the DNS resolver. <strong>ARP</strong>: to send anything off the subnet the laptop needs the gateway's MAC address, so it broadcasts \"who has 192.168.1.1?\" and caches the answer. <strong>DNS</strong>: it asks the resolver for the venue's A record over UDP port 53. The snippet builds that 35-byte query by hand and parses a 51-byte answer with a 60-second TTL.</p><p>Then the connection itself. <strong>TCP</strong>: SYN, SYN-ACK, ACK, one round trip that agrees the initial sequence numbers. <strong>TLS 1.3</strong>: one more round trip to check the server's certificate and derive session keys. <strong>HTTP</strong>: a GET carrying <code>Upgrade: websocket</code> and a <code>Sec-WebSocket-Key</code>, answered by <code>101 Switching Protocols</code>. <strong>WebSocket</strong>: from then on, framed messages in both directions over the same TCP connection.</p><p>The snippet counts round trips: about 21 ms on the local network, then 120 ms more to a venue 24 ms away, so 141 ms at best from lid-open to the first book snapshot, and far more in practice because scanning and DHCP involve waiting. After that, each request costs one round trip. That is why bots keep connections open and reconnect deliberately, and why DNS answers are cached.</p>",
+          "name": "The WebSocket upgrade: one HTTP handshake, then full-duplex framed messages",
+          "explain": "<p>HTTP polling asks \"anything new?\" on a timer and pays a request, headers and latency every time. A market needs the server to push the moment something changes, and the client to send orders on the same connection. WebSocket starts as one ordinary HTTP request carrying <code>Upgrade: websocket</code> and a random <code>Sec-WebSocket-Key</code>; the server answers <code>101 Switching Protocols</code> with <code>Sec-WebSocket-Accept</code>, the base64 SHA-1 of the key concatenated with a fixed GUID; from then on the same TCP socket carries framed messages in both directions.</p><p>The snippet computes the accept value for the RFC 6455 example key and reproduces the RFC's answer, <code>s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code>. It then frames a 78-byte order the way a client must: one header byte for FIN plus opcode (<code>0x81</code>, a final text frame), one byte for the mask bit and the length (<code>0xce</code> = masked, 78), four mask bytes, and the payload XORed with them, 84 bytes in all. The server unframes it back to the identical bytes. Payloads of 126 bytes or more switch to a 16-bit extended length, visible in the 300-byte frame's <code>7e 01 2c</code>. Clients mask so that intermediaries cannot be tricked into caching attacker-chosen bytes; servers do not mask.</p><p>In the lab this is step 2 (<em>The upgrade, by hand</em>): you open a raw socket to your own exchange, send the request and read <code>HTTP/1.1 101 Switching Protocols</code> back. In the arena the <code>websockets</code> library does all of this; knowing the bytes is what lets you debug a proxy or a TLS terminator that silently strips the upgrade.</p>",
           "code": {
             "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport struct\n\ndef dns_query(name, qid=0x3350, qtype=1):\n    \"\"\"A real DNS question (RFC 1035): header, then the name as length-prefixed labels.\"\"\"\n    header = struct.pack(\"!HHHHHH\", qid, 0x0100, 1, 0, 0, 0)          # recursion desired, 1 question\n    qname = b\"\".join(bytes([len(p)]) + p.encode() for p in name.split(\".\")) + b\"\\0\"\n    return header + qname + struct.pack(\"!HH\", qtype, 1)              # type A, class IN\n\ndef dns_answer(query, ip, ttl=60):\n    \"\"\"What the resolver sends back: the question echoed, plus one A record.\"\"\"\n    header = struct.pack(\"!HHHHHH\", struct.unpack(\"!H\", query[:2])[0], 0x8180, 1, 1, 0, 0)\n    rr = struct.pack(\"!HHHIH4s\", 0xC00C, 1, 1, ttl, 4, bytes(int(o) for o in ip.split(\".\")))  # C00C: pointer to the name\n    return header + query[12:] + rr\n\nq = dns_query(\"arena.example.org\")\nr = dns_answer(q, \"203.0.113.10\")\nprint(f\"DNS query  {len(q)} B over UDP/53: {q.hex(' ')}\")\nan = r[len(q):]\n_, _, _, ttl, _, addr = struct.unpack(\"!HHHIH4s\", an)\nprint(f\"DNS answer {len(r)} B: id match {r[:2] == q[:2]}, A {'.'.join(map(str, addr))}, cache for {ttl} s\")\nprint()\n\nLAN, WAN = 3.0, 24.0                       # round-trip times in ms: to the access point, to the venue\nsteps = [\n    (\"802.11 scan, auth, associate\", \"L2\", \"radio frames to the AP\",            2, LAN),\n    (\"WPA2/3 4-way handshake\",       \"L2\", \"derive the session keys\",           2, LAN),\n    (\"DHCP discover/offer/req/ack\",  \"L7\", \"UDP 68->67 broadcast; sets L3: IP, gateway, DNS\", 2, LAN),\n    (\"ARP who-has 192.168.1.1\",      \"L2\", \"gateway's MAC for the first hop\",   1, LAN),\n    (\"DNS A arena.example.org\",      \"L7\", \"UDP/53 via the resolver DHCP gave\", 1, WAN),\n    (\"TCP SYN, SYN-ACK, ACK\",        \"L4\", \"port 443, seq numbers agreed\",      1, WAN),\n    (\"TLS 1.3 hello, keys, finished\",\"L6\", \"certificate checked, keys derived\", 1, WAN),\n    (\"HTTP GET Upgrade -> 101\",      \"L7\", \"Sec-WebSocket-Key / -Accept\",       1, WAN),\n    (\"first WebSocket frame\",        \"L7\", \"subscribe -> book_snapshot\",        1, WAN),\n]\nt = 0.0\nprint(f\"{'step':<30}{'layer':<6}{'RTTs':>4}{'clock (ms)':>12}   what it buys\")\nfor name, layer, what, rtts, rtt in steps:\n    t += rtts * rtt\n    print(f\"{name:<30}{layer:<6}{rtts:>4}{t:>12.0f}   {what}\")\ncold = t\nwarm = sum(r * rtt for n, _, _, r, rtt in steps[4:])\nprint(f\"cold start {cold:.0f} ms; already on the network {warm:.0f} ms; \"\n      f\"connection reused: {steps[-1][3] * WAN:.0f} ms per request/response\")\nprint(\"(a floor in round trips: real scans and DHCP add tens to hundreds of ms of waiting)\")\n",
-            "output": "DNS query  35 B over UDP/53: 33 50 01 00 00 01 00 00 00 00 00 00 05 61 72 65 6e 61 07 65 78 61 6d 70 6c 65 03 6f 72 67 00 00 01 00 01\nDNS answer 51 B: id match True, A 203.0.113.10, cache for 60 s\n\nstep                          layer RTTs  clock (ms)   what it buys\n802.11 scan, auth, associate  L2       2           6   radio frames to the AP\nWPA2/3 4-way handshake        L2       2          12   derive the session keys\nDHCP discover/offer/req/ack   L7       2          18   UDP 68->67 broadcast; sets L3: IP, gateway, DNS\nARP who-has 192.168.1.1       L2       1          21   gateway's MAC for the first hop\nDNS A arena.example.org       L7       1          45   UDP/53 via the resolver DHCP gave\nTCP SYN, SYN-ACK, ACK         L4       1          69   port 443, seq numbers agreed\nTLS 1.3 hello, keys, finished L6       1          93   certificate checked, keys derived\nHTTP GET Upgrade -> 101       L7       1         117   Sec-WebSocket-Key / -Accept\nfirst WebSocket frame         L7       1         141   subscribe -> book_snapshot\ncold start 141 ms; already on the network 120 ms; connection reused: 24 ms per request/response\n(a floor in round trips: real scans and DHCP add tens to hundreds of ms of waiting)"
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport base64\nimport hashlib\nimport os\nimport struct\n\nGUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\"          # fixed by RFC 6455\n\ndef accept_key(client_key):\n    return base64.b64encode(hashlib.sha1((client_key + GUID).encode()).digest()).decode()\n\nkey = \"dGhlIHNhbXBsZSBub25jZQ==\"                          # the RFC's own example nonce\nrequest = (\"GET / HTTP/1.1\\r\\nHost: localhost:8765\\r\\nUpgrade: websocket\\r\\n\"\n           \"Connection: Upgrade\\r\\nSec-WebSocket-Key: \" + key + \"\\r\\nSec-WebSocket-Version: 13\\r\\n\\r\\n\")\nresponse = (\"HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\n\"\n            \"Sec-WebSocket-Accept: \" + accept_key(key) + \"\\r\\n\\r\\n\")\nprint(request.splitlines()[0], \"...\", len(request), \"bytes, once\")\nprint(response.splitlines()[0])\nprint(\"Sec-WebSocket-Accept:\", accept_key(key), \"(RFC 6455 expects s3pPLMBiTxaQ9kYGzzhZRbK+xOo=)\")\n\ndef frame(payload: bytes, mask_key: bytes | None):\n    \"\"\"A single final text frame. Clients MUST mask; servers must not.\"\"\"\n    b0 = 0x80 | 0x1                                           # FIN + opcode text\n    n = len(payload)\n    mbit = 0x80 if mask_key else 0\n    head = struct.pack(\"!BB\", b0, mbit | n) if n < 126 else struct.pack(\"!BBH\", b0, mbit | 126, n)\n    if mask_key:\n        payload = bytes(c ^ mask_key[i % 4] for i, c in enumerate(payload))\n        return head + mask_key + payload\n    return head + payload\n\ndef unframe(data: bytes):\n    fin, op = data[0] >> 7, data[0] & 0x0F\n    masked, n, i = data[1] >> 7, data[1] & 0x7F, 2\n    if n == 126:\n        n, i = struct.unpack(\"!H\", data[2:4])[0], 4\n    if masked:\n        k, i = data[i:i + 4], i + 4\n        return fin, op, bytes(c ^ k[j % 4] for j, c in enumerate(data[i:i + n]))\n    return fin, op, data[i:i + n]\n\nmsg = b'{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}'\nmask = bytes([0x37, 0xFA, 0x21, 0x3D])        # fixed here; a real client draws os.urandom(4)\nwire = frame(msg, mask)\nprint(f\"payload {len(msg)} B -> client frame {len(wire)} B (2 header + 4 mask)\")\nprint(\"first bytes on the wire:\", wire[:8].hex(\" \"))\nfin, op, back = unframe(wire)\nprint(f\"server unframes: fin={fin} opcode={op} (text) equal={back == msg}\")\nbig = frame(b\"x\" * 300, None)\nprint(\"300-byte server frame header:\", big[:4].hex(\" \"), \"-> 126 means a 16-bit length follows\")\n",
+            "output": "GET / HTTP/1.1 ... 153 bytes, once\nHTTP/1.1 101 Switching Protocols\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo= (RFC 6455 expects s3pPLMBiTxaQ9kYGzzhZRbK+xOo=)\npayload 78 B -> client frame 84 B (2 header + 4 mask)\nfirst bytes on the wire: 81 ce 37 fa 21 3d 4c d8\nserver unframes: fin=1 opcode=1 (text) equal=True\n300-byte server frame header: 81 7e 01 2c -> 126 means a 16-bit length follows"
           }
         },
         {
-          "name": "IP addresses, routing and NAT: why the venue can answer you but cannot call you",
-          "explain": "<p>An IPv4 address is 32 bits, written as four bytes, and a prefix length says how many leading bits name the network. The laptop's <code>192.168.1.23/24</code> lives on network 192.168.1.0, with 254 usable hosts and broadcast address 192.168.1.255. Anything on that subnet is reached directly, after ARP finds its MAC; anything else goes to the default gateway. RFC 1918 reserves three blocks for private networks (10/8, 172.16/12 and 192.168/16), carriers use 100.64/10 for their own NAT layer, and none of them is routed on the public Internet.</p><p>Routing is a table lookup with one rule: the longest matching prefix wins. In the snippet, 10.8.4.2 matches both the VPN's /16 and the colo subnet's /24, and the /24 wins; 203.0.113.10 matches only the /0 default route and leaves through the gateway; 127.0.0.1 never leaves the machine. Every router on the path does the same lookup in its own table and decrements the TTL, so a routing loop cannot circulate a packet forever.</p><p>Your home router also does <strong>NAT</strong>, network address translation. Two laptops can both use source port 51514: the router rewrites each outgoing flow to its single public address with a fresh port (40001, 40002) and remembers the mapping, so the venue's replies find their way back. A packet arriving at a public port that nobody inside asked for has no mapping and is dropped. That is why your bot always dials the venue and never the reverse, why the venue keeps the connection open to push data to you, and why a NAT that silently expires an idle mapping kills a quiet connection: one more reason for the heartbeats of week 4.</p>",
+          "name": "A protocol is a versioned contract: typed models, a discriminated union, round-trip and reject",
+          "explain": "<p>Framing says where a message ends; the schema says what it means. The arena's message module is the contract between every process: two discriminated unions split by direction, eight message types a client may send and nine the venue may send back, each with a literal <code>type</code> field that tells the dispatcher which model to build. A contract has three properties you can test: a lossless round-trip, bad data that cannot be constructed, and a versioning rule that lets old and new peers talk.</p><p>The snippet implements a small pydantic in plain Python to show there is no magic. Dataclass fields carry the types; <code>__post_init__</code> checks every field against its annotation, including <code>Literal</code> and <code>Optional</code>, and reports all violations at once; <code>model_dump_json</code> and <code>parse_message</code> go to the wire and back. The order round-trips equal. Side <code>'long'</code> is rejected, a missing price is rejected, and a string price with a fractional quantity produces two errors in one message. An <code>order_ack</code> from an older venue that lacks <code>queue_ahead</code> still parses, because fields added later carry defaults: add optional fields, never repurpose old ones. An unknown tag fails loudly at the boundary.</p><p>In the lab this is steps 3 and 4 (<em>The contract</em> and <em>Round-trip, reject, and version</em>) against the real pydantic models: 21 known types, the same four experiments, and the observation that a <code>Literal</code> makes an illegal state unrepresentable rather than merely detected. In the arena the rule is written into the codebase itself: every message is a model, sent with <code>model_dump_json()</code> and parsed with the model class, never a raw dict.</p>",
           "code": {
             "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport ipaddress\nimport itertools\n\nme = ipaddress.ip_interface(\"192.168.1.23/24\")             # what DHCP handed the laptop\nnet = me.network\nprint(f\"laptop {me.ip}  network {net}  mask {net.netmask}  broadcast {net.broadcast_address}  \"\n      f\"usable hosts {net.num_addresses - 2}\")\nKINDS = [(\"10.0.0.0/8\", \"RFC 1918 private\"), (\"172.16.0.0/12\", \"RFC 1918 private\"),\n         (\"192.168.0.0/16\", \"RFC 1918 private\"), (\"100.64.0.0/10\", \"carrier-grade NAT (RFC 6598)\"),\n         (\"203.0.113.0/24\", \"documentation range, stands in for a public venue\"),\n         (\"127.0.0.0/8\", \"loopback\")]\nfor a in (\"192.168.1.23\", \"10.8.4.2\", \"172.20.0.9\", \"100.64.1.1\", \"203.0.113.10\", \"8.8.8.8\"):\n    ip = ipaddress.ip_address(a)\n    kind = next((k for n, k in KINDS if ip in ipaddress.ip_network(n)), \"public, globally routed\")\n    print(f\"  {a:<13} {kind}\")\n\n# the routing table: the MOST SPECIFIC matching prefix wins (longest-prefix match)\nroutes = [(ipaddress.ip_network(\"0.0.0.0/0\"), \"via 192.168.1.1 (default gateway)\"),\n          (ipaddress.ip_network(\"192.168.1.0/24\"), \"direct on en0 (ARP for the MAC)\"),\n          (ipaddress.ip_network(\"10.8.0.0/16\"), \"via utun3 (VPN)\"),\n          (ipaddress.ip_network(\"10.8.4.0/24\"), \"via utun3, colo subnet\"),\n          (ipaddress.ip_network(\"127.0.0.0/8\"), \"loopback lo0\")]\n\ndef route(dst):\n    d = ipaddress.ip_address(dst)\n    best = max((n for n, _ in routes if d in n), key=lambda n: n.prefixlen)\n    return best, dict(routes)[best]\n\nprint(\"routing decisions:\")\nfor dst in (\"192.168.1.1\", \"10.8.4.2\", \"10.8.9.9\", \"203.0.113.10\", \"127.0.0.1\"):\n    n, how = route(dst)\n    print(f\"  {dst:<13} matches /{n.prefixlen:<2} {str(n):<15} -> {how}\")\n\n# NAT on the home router: many private (ip, port) pairs share one public address\nPUBLIC = ipaddress.ip_address(\"198.51.100.7\")\nports, table, back = itertools.count(40001), {}, {}\n\ndef outbound(src, sport, dst, dport):\n    key = (src, sport, dst, dport)\n    if key not in table:\n        table[key] = next(ports)\n        back[(table[key], dst, dport)] = (src, sport)\n    return f\"{src}:{sport} -> {dst}:{dport}  becomes  {PUBLIC}:{table[key]} -> {dst}:{dport}\"\n\ndef inbound(dst_port, src, sport):\n    hit = back.get((dst_port, src, sport))\n    return f\"to {PUBLIC}:{dst_port} from {src}:{sport} -> \" + (f\"forwarded to {hit[0]}:{hit[1]}\" if hit\n                                                            else \"DROPPED (no mapping: nobody inside asked)\")\n\nprint(\"NAT:\")\nprint(\" \", outbound(\"192.168.1.23\", 51514, \"203.0.113.10\", 443))\nprint(\" \", outbound(\"192.168.1.40\", 51514, \"203.0.113.10\", 443))    # same source port, other laptop\nprint(\" \", inbound(40001, \"203.0.113.10\", 443))\nprint(\" \", inbound(40002, \"203.0.113.10\", 443))\nprint(\" \", inbound(40001, \"198.18.0.66\", 443))                      # unsolicited\n",
-            "output": "laptop 192.168.1.23  network 192.168.1.0/24  mask 255.255.255.0  broadcast 192.168.1.255  usable hosts 254\n  192.168.1.23  RFC 1918 private\n  10.8.4.2      RFC 1918 private\n  172.20.0.9    RFC 1918 private\n  100.64.1.1    carrier-grade NAT (RFC 6598)\n  203.0.113.10  documentation range, stands in for a public venue\n  8.8.8.8       public, globally routed\nrouting decisions:\n  192.168.1.1   matches /24 192.168.1.0/24  -> direct on en0 (ARP for the MAC)\n  10.8.4.2      matches /24 10.8.4.0/24     -> via utun3, colo subnet\n  10.8.9.9      matches /16 10.8.0.0/16     -> via utun3 (VPN)\n  203.0.113.10  matches /0  0.0.0.0/0       -> via 192.168.1.1 (default gateway)\n  127.0.0.1     matches /8  127.0.0.0/8     -> loopback lo0\nNAT:\n  192.168.1.23:51514 -> 203.0.113.10:443  becomes  198.51.100.7:40001 -> 203.0.113.10:443\n  192.168.1.40:51514 -> 203.0.113.10:443  becomes  198.51.100.7:40002 -> 203.0.113.10:443\n  to 198.51.100.7:40001 from 203.0.113.10:443 -> forwarded to 192.168.1.23:51514\n  to 198.51.100.7:40002 from 203.0.113.10:443 -> forwarded to 192.168.1.40:51514\n  to 198.51.100.7:40001 from 198.18.0.66:443 -> DROPPED (no mapping: nobody inside asked)"
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nfrom dataclasses import dataclass, asdict, fields, MISSING\nfrom typing import Literal, Optional, get_args, get_origin, get_type_hints\n\nclass ValidationError(ValueError):\n    pass\n\ndef _check(name, tp, v):\n    if get_origin(tp) is Literal:\n        return None if v in get_args(tp) else f\"{name}: input should be one of {get_args(tp)}\"\n    if get_origin(tp) is not None and type(None) in get_args(tp):          # Optional[X]\n        return None if v is None else _check(name, [a for a in get_args(tp) if a is not type(None)][0], v)\n    if tp is float:\n        return None if isinstance(v, (int, float)) and not isinstance(v, bool) else f\"{name}: must be a number\"\n    if tp is int:\n        return None if isinstance(v, int) and not isinstance(v, bool) else f\"{name}: must be an integer\"\n    return None if isinstance(v, tp) else f\"{name}: must be {tp.__name__}\"\n\nclass Model:\n    \"\"\"A tiny pydantic: validate on construction, dump to JSON, parse from JSON.\"\"\"\n    def __post_init__(self):\n        hints = get_type_hints(type(self))\n        errs = [e for f in fields(self) if (e := _check(f.name, hints[f.name], getattr(self, f.name)))]\n        if errs:\n            raise ValidationError(f\"{len(errs)} validation error(s) for {type(self).__name__}: \" + \"; \".join(errs))\n    def model_dump_json(self):\n        return json.dumps(asdict(self), separators=(\",\", \":\"))\n    @classmethod\n    def model_validate(cls, d):\n        missing = [f.name for f in fields(cls) if f.default is MISSING and f.name not in d]\n        if missing:\n            raise ValidationError(f\"{cls.__name__}: field required: {missing}\")\n        return cls(**{f.name: d[f.name] for f in fields(cls) if f.name in d})\n\n@dataclass\nclass PlaceOrder(Model):\n    team_id: str\n    symbol: str\n    side: Literal[\"buy\", \"sell\"]\n    order_type: Literal[\"limit\", \"market\", \"post_only\", \"ioc\"]\n    price: Optional[float]\n    quantity: int\n    type: Literal[\"place_order\"] = \"place_order\"\n    stop_price: Optional[float] = None                 # added later, with a default\n\n@dataclass\nclass OrderAck(Model):\n    order_id: str\n    symbol: str\n    side: Literal[\"buy\", \"sell\"]\n    price: float\n    quantity: int\n    type: Literal[\"order_ack\"] = \"order_ack\"\n    queue_ahead: int = 0                                # added mid-season, with a default\n    level_qty: int = 0\n\nTYPE_MAP = {\"place_order\": PlaceOrder, \"order_ack\": OrderAck}   # the discriminated union\n\ndef parse_message(raw: str):\n    d = json.loads(raw)\n    cls = TYPE_MAP.get(d.get(\"type\"))\n    if cls is None:\n        raise KeyError(f\"Unknown message type: {d.get('type')!r}\")\n    return cls.model_validate(d)\n\no = PlaceOrder(\"me\", \"AAPL\", \"buy\", \"limit\", 185.50, 5)\nwire = o.model_dump_json()\nprint(\"wire:\", wire)\nprint(\"round-trip equal?\", parse_message(wire) == o)\nfor bad in ('{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"long\",\"order_type\":\"limit\",\"price\":1.0,\"quantity\":1}',\n            '{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"quantity\":1}',\n            '{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"price\":\"185.5\",\"quantity\":1.5}'):\n    try:\n        parse_message(bad)\n    except ValidationError as e:\n        print(\"rejected:\", e)\nold = parse_message('{\"type\":\"order_ack\",\"order_id\":\"a1\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}')\nprint(type(old).__name__, \"from an older venue parses: queue_ahead =\", old.queue_ahead, \"level_qty =\", old.level_qty)\ntry:\n    parse_message('{\"type\":\"place_ordr\",\"symbol\":\"AAPL\"}')\nexcept KeyError as e:\n    print(\"unknown type ->\", e)\n",
+            "output": "wire: {\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"price\":185.5,\"quantity\":5,\"type\":\"place_order\",\"stop_price\":null}\nround-trip equal? True\nrejected: 1 validation error(s) for PlaceOrder: side: input should be one of ('buy', 'sell')\nrejected: PlaceOrder: field required: ['price']\nrejected: 2 validation error(s) for PlaceOrder: price: must be a number; quantity: must be an integer\nOrderAck from an older venue parses: queue_ahead = 0 level_qty = 0\nunknown type -> \"Unknown message type: 'place_ordr'\""
           }
         },
         {
-          "name": "TCP against UDP: a reliable byte stream or fire-and-forget datagrams, and Nagle in between",
-          "explain": "<p>TCP gives an application a reliable, ordered byte stream. It opens with a handshake (SYN, SYN-ACK, ACK) that agrees initial sequence numbers. Every byte then has a sequence number, the receiver acknowledges what it has, and anything unacknowledged after a timeout is sent again. Flow control (the receive window) and congestion control stop the sender from flooding the path. The price is latency at bad moments: a lost segment holds back every byte behind it until the retransmission arrives (head-of-line blocking), and the stream has no message boundaries. UDP is the opposite: datagrams, no connection, no retransmission, no ordering, and each <code>recvfrom</code> returns exactly one whole datagram. The snippet's first lines show both: three <code>sendto</code> calls arrive as three datagrams, while three <code>sendall</code> calls on TCP come back as one 27-byte read.</p><p>Nagle's algorithm (RFC 896) is TCP's defence against tiny packets: while earlier data is unacknowledged, small writes are held back and coalesced. Combined with the receiver's delayed ACK, a write-write-read pattern (header, body, wait for the reply) stalls until the delayed-ACK timer fires, up to 40 ms on Linux. The snippet's model prints the cost: on a 50-microsecond path the request takes 40 ms instead of 0.05. Measured on this machine's loopback the stall does not appear, because the kernel acknowledged at once; links between machines behave like the model. <code>TCP_NODELAY</code> is off on a new socket, so set it on every order-entry connection, and write each message with one call.</p><p>Exchanges usually publish market data as UDP multicast, where speed matters more than any single packet and recovery is done with sequence numbers. Order entry runs over TCP, where every message must arrive, once and in order.</p>",
+          "name": "Three ways input is wrong, and none may kill the session",
+          "explain": "<p>A public endpoint receives garbage: truncated frames, typos in the tag, fields of the wrong type, valid JSON of the wrong shape. The rule for a venue is that one bad frame must never take down a session, neither the sender's nor anyone else's. The inbound guard therefore distinguishes three failures, in order of cost: the bytes are not JSON; the JSON has no known <code>type</code>; the type is known but the fields fail validation. Each produces an error reply and a <code>continue</code>, never a <code>raise</code>, and the whole handler sits inside a last-resort <code>except</code> so that a bug in the guard itself degrades to an internal error rather than a dropped connection.</p><p>The snippet feeds six frames through such a guard: a valid order gets an ack; a truncated frame, a misspelt tag, a known tag with a bad side, and a JSON list each get a <code>PARSE_ERROR</code> naming the problem; a valid cancel afterwards still works. The session is open at the end, with one ack, four errors and one cancel ack.</p><p>In the lab this is step 5 (<em>The venue enforces it too</em>): you read the server's four-line inbound guard, send an invalid order and an unknown tag from a script, receive two <code>ErrorMsg</code> replies (<em>5 validation errors for PlaceOrder</em> and <em>Unknown message type</em>) and confirm the connection stayed open. In the arena exchange teams inherit this guard; a venue that crashes on a malformed frame loses every connected team at once, and reliability is the first thing an exchange team competes on.</p>",
           "code": {
             "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport socket\nimport statistics\nimport threading\nimport time\n\n# --- 1. message boundaries: UDP keeps them, TCP does not ---------------------------------\nrx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\nrx.bind((\"127.0.0.1\", 0))\ntx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\nfor m in (b\"px=185.49\", b\"px=185.50\", b\"px=185.48\"):\n    tx.sendto(m, rx.getsockname())                    # no connection, no handshake: just send\nprint(\"UDP 3 sendto  -> 3 recvfrom:\", [rx.recvfrom(2048)[0].decode() for _ in range(3)])\ntx.close(); rx.close()\n\nsrv = socket.create_server((\"127.0.0.1\", 0))\ncli = socket.create_connection(srv.getsockname())      # SYN, SYN-ACK, ACK happen inside this call\nconn, peer = srv.accept()\nfor m in (b\"px=185.49\", b\"px=185.50\", b\"px=185.48\"):\n    cli.sendall(m)\ntime.sleep(0.05)\nprint(\"TCP 3 sendall -> 1 recv     :\", [conn.recv(2048).decode()], \"(a byte stream: framing is your job)\")\nprint(\"TCP_NODELAY default on a new socket:\", cli.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))\ncli.close(); conn.close(); srv.close()\n\n# --- 2. Nagle's rule, as a model: a small segment waits while earlier data is unacknowledged --\ndef write_write_read(rtt, nagle, delayed_ack=40.0):\n    \"\"\"Client writes a 16-byte header, then a 48-byte body, then waits for the reply.\n    The server replies only once it has both; until then it delays its ACK (up to 40 ms on Linux).\"\"\"\n    header_arrives = rtt / 2\n    if nagle:                                          # body is small and the header is unacked:\n        ack_back = header_arrives + delayed_ack + rtt / 2   # ... wait for the server's delayed ACK\n        body_sent = ack_back\n    else:\n        body_sent = 0.0                                # TCP_NODELAY: the body leaves at once\n    reply_back = body_sent + rtt / 2 + rtt / 2\n    return reply_back\n\nfor rtt in (0.05, 0.5, 24.0):\n    on, off = write_write_read(rtt, True), write_write_read(rtt, False)\n    print(f\"model, RTT {rtt:5.2f} ms: Nagle on {on:6.2f} ms, TCP_NODELAY {off:6.2f} ms  (x{on / off:,.0f})\")\n\n# --- 3. and measured on this machine's loopback -----------------------------------------------\ndef server(listener):\n    c, _ = listener.accept()\n    with c:\n        while True:\n            need, buf = 64, b\"\"\n            while len(buf) < need:\n                chunk = c.recv(need - len(buf))\n                if not chunk:\n                    return\n                buf += chunk\n            c.sendall(b\"ack\")\n\ndef measured(nodelay, n=25):\n    lst = socket.create_server((\"127.0.0.1\", 0))\n    th = threading.Thread(target=server, args=(lst,), daemon=True)\n    th.start()\n    s = socket.create_connection(lst.getsockname())\n    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, int(nodelay))\n    out = []\n    for _ in range(n):\n        t = time.perf_counter()\n        s.sendall(b\"H\" * 16)\n        s.sendall(b\"B\" * 48)\n        s.recv(16)\n        out.append((time.perf_counter() - t) * 1000)\n    s.close(); th.join(1); lst.close()\n    return statistics.median(out)\n\non, off = measured(False), measured(True)\nprint(f\"measured here (loopback): Nagle on {on:.3f} ms, TCP_NODELAY {off:.3f} ms -> \"\n      f\"{'a delayed-ACK stall' if on > 5 else 'no stall on this loopback'}\")\nprint(\"set TCP_NODELAY on every order-entry socket anyway: the stall appears on real links\")\n",
-            "output": "UDP 3 sendto  -> 3 recvfrom: ['px=185.49', 'px=185.50', 'px=185.48']\nTCP 3 sendall -> 1 recv     : ['px=185.49px=185.50px=185.48'] (a byte stream: framing is your job)\nTCP_NODELAY default on a new socket: 0\nmodel, RTT  0.05 ms: Nagle on  40.10 ms, TCP_NODELAY   0.05 ms  (x802)\nmodel, RTT  0.50 ms: Nagle on  41.00 ms, TCP_NODELAY   0.50 ms  (x82)\nmodel, RTT 24.00 ms: Nagle on  88.00 ms, TCP_NODELAY  24.00 ms  (x4)\nmeasured here (loopback): Nagle on 0.104 ms, TCP_NODELAY 0.066 ms -> no stall on this loopback\nset TCP_NODELAY on every order-entry socket anyway: the stall appears on real links"
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nfrom collections import Counter\n\nVALID = {\"place_order\": {\"symbol\", \"side\", \"price\", \"quantity\"}, \"cancel_order\": {\"order_id\"}}\n\ndef handle(raw):\n    \"\"\"The venue's inbound guard: three ways input is wrong, none may end the session.\"\"\"\n    try:\n        d = json.loads(raw)                                   # 1. not JSON at all\n    except json.JSONDecodeError as e:\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\", \"message\": f\"invalid JSON: {e.msg}\"}\n    t = d.get(\"type\") if isinstance(d, dict) else None\n    if t not in VALID:                                        # 2. unknown or missing tag\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\", \"message\": f\"Unknown message type: {t!r}\"}\n    missing = VALID[t] - d.keys()                             # 3. known tag, bad fields\n    if missing or (t == \"place_order\" and d.get(\"side\") not in (\"buy\", \"sell\")):\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\",\n                \"message\": f\"{len(missing) + (d.get('side') not in ('buy', 'sell'))} validation errors for {t}\"}\n    return {\"type\": \"order_ack\" if t == \"place_order\" else \"cancel_ack\"}\n\nframes = [\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}',\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"long\"',             # truncated\n    '{\"type\":\"place_ordr\",\"symbol\":\"AAPL\"}',                           # typo in the tag\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"long\"}',            # bad fields\n    '[1, 2, 3]',                                                       # JSON, wrong shape\n    '{\"type\":\"cancel_order\",\"order_id\":\"a1\"}',\n]\nsession_open, replies = True, Counter()\nfor i, raw in enumerate(frames, 1):\n    try:\n        r = handle(raw)\n    except Exception:                                          # belt and braces: never raise out\n        r = {\"type\": \"error\", \"code\": \"INTERNAL\"}\n    replies[r[\"type\"]] += 1\n    print(f\"frame {i}: {r['type']:<10} {r.get('message', '')}\")\nprint(f\"session still open: {session_open}   replies: {dict(replies)}\")\n",
+            "output": "frame 1: order_ack\nframe 2: error      invalid JSON: Expecting ',' delimiter\nframe 3: error      Unknown message type: 'place_ordr'\nframe 4: error      3 validation errors for place_order\nframe 5: error      Unknown message type: None\nframe 6: cancel_ack\nsession still open: True   replies: {'order_ack': 1, 'error': 4, 'cancel_ack': 1}"
           }
         },
         {
-          "name": "A TCP echo server and client in two processes, with length-prefix framing",
-          "explain": "<p>Week 4 frames messages in memory; here the bytes cross a real socket between two operating-system processes. The server process calls <code>socket.create_server((\"127.0.0.1\", 0))</code>. Port 0 asks the OS for a free ephemeral port, which the server reports back through a <code>multiprocessing.Queue</code>, and <code>accept()</code> blocks until the client connects. The client connects, sets <code>TCP_NODELAY</code>, and the two talk a framed protocol: every message is a 4-byte big-endian length followed by that many bytes of JSON, and a length of zero means goodbye.</p><p>The test is adversarial on purpose. The client writes three orders in a single <code>sendall</code>, so one server read may hold all three; then it writes the fourth in 7-byte pieces with pauses, so the server sees fragments. <code>recv_exact</code> is what makes this work: it loops until it has exactly <code>n</code> bytes, because <code>recv(n)</code> may return fewer, and it raises if the peer closes mid-message. With it the server decodes four complete orders in sequence and acknowledges each with its own sequence number. The client reads four framed acks and sends the goodbye, and the server process exits with status 0.</p><p>Three habits from this snippet carry straight into the arena and into any exchange gateway. Loop on <code>recv</code> until a whole message is in hand, and never assume one read is one message. Give the protocol an explicit end (here the zero length, in the arena a close frame), so that a clean shutdown can be told apart from a crash. And put the length first: a parser that knows the size before it reads can bound its buffer and reject an absurd length, instead of scanning untrusted bytes for a delimiter.</p>",
+          "name": "Heartbeats and sequence numbers: detecting a dead peer and a missing message",
+          "explain": "<p>TCP will tell you when a connection closes cleanly. It will not tell you quickly when the peer has silently gone away, and it cannot tell you that a message you needed was never sent because the publisher restarted. Two small mechanisms cover both. A heartbeat, a message expected every second, turns silence into a signal: after a timeout of several missed beats the client declares the connection dead, reconnects and resubscribes. A sequence number on every incremental update turns a missing message into a gap you can see: when delta 5 arrives while you expected 4, the book you hold is wrong and the only safe move is to discard it and ask for a full snapshot.</p><p>The snippet replays a scripted stream. Deltas 2 and 3 apply; delta 5 reveals a gap of one, the book is discarded, delta 6 is ignored until the snapshot at 1.9 s rebuilds it; then the stream goes silent for 4.5 s, beyond the 3 s timeout, so the client declares the peer dead, reconnects, ignores the first delta and resynchronises from the next snapshot. A replay can only notice silence when the next event arrives; a live client runs the same check on a timer, so it would have declared the peer dead at 6.0 s.</p><p>In the lab the <code>BookSnapshot</code> you stream in step 6 (<em>Talk to the exchange by hand</em>) is a full snapshot every time, which is why the arena's feed is simple to consume; the deck's <em>Backpressure, Heartbeats &amp; Reconnection</em> slide covers the incremental case every real exchange feed uses. In the arena the engine rebuilds <code>MarketData</code> on every reconnect for exactly this reason, and week 9 kills the venue on purpose to watch it happen.</p>",
           "code": {
             "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport multiprocessing as mp\nimport os\nimport socket\nimport struct\nimport time\n\nHDR = struct.Struct(\"!I\")                       # 4-byte big-endian length before every message\n\ndef recv_exact(sock, n):\n    buf = b\"\"\n    while len(buf) < n:\n        chunk = sock.recv(n - len(buf))\n        if not chunk:\n            raise ConnectionError(\"peer closed mid-message\")\n        buf += chunk\n    return buf\n\ndef recv_msg(sock):\n    (n,) = HDR.unpack(recv_exact(sock, HDR.size))\n    return recv_exact(sock, n) if n else None    # length 0 = \"goodbye\"\n\ndef frame(obj):\n    body = json.dumps(obj, separators=(\",\", \":\")).encode()\n    return HDR.pack(len(body)) + body\n\ndef echo_server(port_q):\n    \"\"\"Runs in its OWN process: bind, report the port, serve one client, echo with an ack.\"\"\"\n    with socket.create_server((\"127.0.0.1\", 0)) as lst:\n        port_q.put((lst.getsockname()[1], os.getpid()))\n        conn, _ = lst.accept()\n        with conn:\n            seq = 0\n            while (raw := recv_msg(conn)) is not None:\n                seq += 1\n                msg = json.loads(raw)\n                conn.sendall(frame({\"type\": \"order_ack\", \"seq\": seq, \"echo\": msg[\"symbol\"],\n                                    \"bytes\": len(raw)}))\n\nif __name__ == \"__main__\":\n    q = mp.Queue()\n    server = mp.Process(target=echo_server, args=(q,))\n    server.start()\n    port, server_pid = q.get(timeout=10)\n    print(f\"server runs in another process: {server_pid != os.getpid()}; \"\n          f\"listening on an OS-assigned ephemeral port: {port > 1023}\")\n    with socket.create_connection((\"127.0.0.1\", port)) as c:\n        c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\n        orders = [{\"type\": \"place_order\", \"symbol\": s, \"side\": \"buy\", \"quantity\": 5} for s in\n                  (\"AAPL\", \"MSFT\", \"NVDA\", \"AMZN\")]\n        c.sendall(frame(orders[0]) + frame(orders[1]) + frame(orders[2]))   # three messages, ONE write\n        whole = frame(orders[3])\n        for i in range(0, len(whole), 7):                                    # one message, many writes\n            c.sendall(whole[i:i + 7])\n            time.sleep(0.002)\n        for _ in range(4):\n            print(\"  client got\", json.loads(recv_msg(c)))\n        c.sendall(HDR.pack(0))                                               # orderly goodbye\n    server.join(timeout=5)\n    print(f\"server exited cleanly: {server.exitcode == 0}\")\n",
-            "output": "server runs in another process: True; listening on an OS-assigned ephemeral port: True\n  client got {'type': 'order_ack', 'seq': 1, 'echo': 'AAPL', 'bytes': 64}\n  client got {'type': 'order_ack', 'seq': 2, 'echo': 'MSFT', 'bytes': 64}\n  client got {'type': 'order_ack', 'seq': 3, 'echo': 'NVDA', 'bytes': 64}\n  client got {'type': 'order_ack', 'seq': 4, 'echo': 'AMZN', 'bytes': 64}\nserver exited cleanly: True"
-          }
-        },
-        {
-          "name": "UDP multicast for market data: sequence numbers, A/B lines and gap fill",
-          "explain": "<p>An exchange that publishes one feed to hundreds of subscribers cannot afford a TCP connection to each, so it sends UDP multicast: one datagram to a group address in 224.0.0.0/4, which the network copies to every port whose host joined the group (IGMP on a real network, <code>IP_ADD_MEMBERSHIP</code> in code). Delivery is not guaranteed, so the protocol on top carries a sequence number in every packet. NASDAQ's MoldUDP64 header, mimicked here, is a session, a 64-bit sequence number and a message count.</p><p>The snippet runs real multicast on the loopback interface: one publisher and two groups, standing for the A and B lines on which venues publish the same feed over separate network paths. Line A loses packet 5 and delivers 8 before 7; line B loses 7. A receiver that tracks the next expected number opens a gap whenever a higher one arrives. On line A the gap at 7 is filled by the late arrival a moment later; the one at 5 is not. Arbitration then takes each sequence number from whichever line delivers it first, and the merged stream is complete without any retransmission, because B's copy of 5 fills A's hole. Only when both lines lose the same packet does the receiver ask the venue's retransmission (gap-fill) server, and a receiver too far behind rebuilds from a snapshot instead.</p><p>The non-negotiable rule is the last line: apply updates strictly in sequence. An order book with a missing add or delete is wrong in a way no later message repairs, so a feed handler that detects a gap marks the book stale and stops trading on it until the gap is filled.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport socket\nimport struct\n\nPKT = struct.Struct(\"!QH\")             # MoldUDP64-style header: sequence number, message count\nUPD = struct.Struct(\"!4sIq\")           # one update: symbol, size, price in 1e-4 dollars\nGROUPS = {\"A\": \"239.1.1.1\", \"B\": \"239.1.1.2\"}    # the same feed, published twice (A/B lines)\n\ndef receiver(group):\n    r = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)\n    r.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n    r.bind((\"\", 0))\n    mreq = struct.pack(\"4s4s\", socket.inet_aton(group), socket.inet_aton(\"127.0.0.1\"))\n    r.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)   # IGMP join, in a real network\n    r.settimeout(0.2)\n    return r\n\ndef publisher():\n    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)\n    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(\"127.0.0.1\"))\n    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)\n    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 0)       # never leave this host\n    return s\n\nupdates = {seq: (b\"AAPL\", 100 * seq, 1_854_900 + 100 * (seq % 3)) for seq in range(1, 11)}\npacket = {seq: PKT.pack(seq, 1) + UPD.pack(*u) for seq, u in updates.items()}\nplan = {\"A\": [1, 2, 3, 4, 6, 8, 7, 9, 10],          # line A loses 5, and 7/8 arrive out of order\n        \"B\": [1, 2, 3, 4, 5, 6, 8, 9, 10]}          # line B loses 7\n\ndef drain(sock):\n    got = []\n    while True:\n        try:\n            data, _ = sock.recvfrom(2048)\n        except socket.timeout:\n            return got\n        seq, n = PKT.unpack_from(data)\n        sym, size, px = UPD.unpack_from(data, PKT.size)\n        got.append((seq, size, px / 1e4))\n\ntry:\n    rx = {line: receiver(g) for line, g in GROUPS.items()}\n    tx = publisher()\n    for line, seqs in plan.items():\n        for seq in seqs:\n            tx.sendto(packet[seq], (GROUPS[line], rx[line].getsockname()[1]))\n    arrived = {line: drain(sock) for line, sock in rx.items()}\n    for sock in list(rx.values()) + [tx]:\n        sock.close()\n    how = \"real IP multicast on the loopback interface\"\nexcept OSError as e:                                 # no multicast route on this host\n    arrived = {line: [(s, updates[s][1], updates[s][2] / 1e4) for s in seqs] for line, seqs in plan.items()}\n    how = f\"simulated ({type(e).__name__}: multicast unavailable here)\"\nprint(\"transport:\", how)\n\nfor line in \"AB\":\n    seqs, expect, gaps = [s for s, _, _ in arrived[line]], 1, []\n    for s in seqs:\n        if s > expect:\n            gaps.append(list(range(expect, s)))\n        expect = max(expect, s + 1)\n    late = [g for g in gaps if all(x in seqs for x in g)]\n    lost = [x for x in range(1, 11) if x not in seqs]\n    print(f\"line {line} arrived {seqs}  gaps opened {gaps}  filled late {late}  lost {lost}\")\n\n# arbitration: take each sequence number from whichever line delivers it first\nbook, src = {}, {}\nfor line in \"AB\":\n    for s, size, px in arrived[line]:\n        if s not in book:\n            book[s], src[s] = (size, px), line\nmissing = [s for s in range(1, 11) if s not in book]\nprint(\"A/B arbitration ->\", \"\".join(src[s] for s in sorted(book)), \"| still missing:\", missing or \"none\")\n\n# if BOTH lines had lost a packet: ask the retransmission (gap-fill) server, then apply in order\nlost_on_both = [5]\nrefill = {s: updates[s] for s in lost_on_both}\nprint(f\"if both lines lose seq 5, ask the gap-fill server: {lost_on_both} -> {[(s, u[1], u[2] / 1e4) for s, u in refill.items()]}\")\nprint(\"apply strictly in sequence; never skip a gap and keep trading on the book\")\n",
-            "output": "transport: real IP multicast on the loopback interface\nline A arrived [1, 2, 3, 4, 6, 8, 7, 9, 10]  gaps opened [[5], [7]]  filled late [[7]]  lost [5]\nline B arrived [1, 2, 3, 4, 5, 6, 8, 9, 10]  gaps opened [[7]]  filled late []  lost [7]\nA/B arbitration -> AAAABAAAAA | still missing: none\nif both lines lose seq 5, ask the gap-fill server: [5] -> [(5, 500, 185.51)]\napply strictly in sequence; never skip a gap and keep trading on the book"
-          }
-        },
-        {
-          "name": "WebSockets with the websockets library: the arena's transport, end to end",
-          "explain": "<p>The arena speaks JSON over WebSocket, and week 4 builds the handshake and the frames by hand. In production you use a library; in Python that is <code>websockets</code>, whose asyncio API is <code>serve(handler, host, port)</code> on the server and <code>async with connect(url) as ws</code> on the client. Both sides then <code>await ws.send(text)</code> and <code>await ws.recv()</code>, or iterate <code>async for raw in ws</code>, while the library handles framing, masking, fragmentation, ping and pong, and the closing handshake.</p><p>The snippet runs a stub of the venue and a bot in one event loop. The client checks the upgrade itself: the response is <code>101 Switching Protocols</code>, and <code>Sec-WebSocket-Accept</code> equals base64(SHA-1(key + the RFC 6455 GUID)) computed from the key the client sent, which proves the server understood the WebSocket request rather than echoing headers back. The bot subscribes and gets three <code>book_snapshot</code> messages with sequence numbers 1 to 3, places an order and receives an <code>order_ack</code> with sequence 4, measures a ping round trip (a control frame, which is how either side detects a dead peer), and leaves with close code 1000, normal closure.</p><p>What the library does not give you is your protocol: typed messages with a <code>type</code> discriminator, validation at the boundary, sequence numbers that let a bot detect a gap across a reconnect, and a heartbeat policy. Those are week 4's subject. Note also what WebSocket inherits from TCP: reliable, ordered delivery, so a gap can only come from a reconnect and never from a dropped packet; and head-of-line blocking, so one slow frame delays every frame behind it.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport asyncio\nimport base64\nimport hashlib\nimport json\n\ntry:\n    import websockets\n    from websockets.asyncio.client import connect\n    from websockets.asyncio.server import serve\nexcept ImportError:                                   # the dashboard's run had it; say so if yours does not\n    websockets = None\n\nGUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\"\n\nasync def venue(ws):\n    \"\"\"A stub of the arena's market-data + order endpoint: JSON text frames, typed by `type`.\"\"\"\n    seq = 0\n    async for raw in ws:\n        msg = json.loads(raw)\n        if msg[\"type\"] == \"subscribe\":\n            for px in (185.48, 185.49, 185.47):\n                seq += 1\n                await ws.send(json.dumps({\"type\": \"book_snapshot\", \"seq\": seq, \"symbol\": msg[\"symbol\"],\n                                          \"bid\": px, \"ask\": round(px + 0.02, 2)}))\n        elif msg[\"type\"] == \"place_order\":\n            seq += 1\n            await ws.send(json.dumps({\"type\": \"order_ack\", \"seq\": seq, \"symbol\": msg[\"symbol\"],\n                                      \"status\": \"accepted\"}))\n\nasync def bot(port):\n    async with connect(f\"ws://127.0.0.1:{port}\") as ws:\n        key = ws.request.headers[\"Sec-WebSocket-Key\"]\n        accept = ws.response.headers[\"Sec-WebSocket-Accept\"]\n        expected = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()\n        print(f\"HTTP {ws.response.status_code} {ws.response.reason_phrase}: Upgrade={ws.response.headers['Upgrade']}, \"\n              f\"Sec-WebSocket-Accept verified: {accept == expected}\")\n        await ws.send(json.dumps({\"type\": \"subscribe\", \"symbol\": \"AAPL\"}))\n        for _ in range(3):\n            m = json.loads(await ws.recv())\n            print(f\"  <- {m['type']:<13} seq={m['seq']} bid={m['bid']} ask={m['ask']}\")\n        await ws.send(json.dumps({\"type\": \"place_order\", \"symbol\": \"AAPL\", \"side\": \"buy\",\n                                  \"quantity\": 5, \"price\": 185.49}))\n        m = json.loads(await ws.recv())\n        print(f\"  <- {m['type']:<13} seq={m['seq']} status={m['status']}\")\n        pong = await ws.ping()                       # a control frame: the keep-alive / dead-peer check\n        rtt = await pong\n        print(f\"ping/pong round trip under 50 ms: {rtt < 0.05}\")\n    print(f\"closed with code {ws.close_code} (1000 = normal closure)\")\n\nasync def main():\n    async with serve(venue, \"127.0.0.1\", 0) as server:\n        port = server.sockets[0].getsockname()[1]\n        await bot(port)\n\nif websockets is None:\n    print(\"websockets is not installed: pip install websockets (the handshake itself is week 4's snippet)\")\nelse:\n    print(\"websockets\", websockets.__version__)\n    asyncio.run(main())\n",
-            "output": "websockets 15.0.1\nHTTP 101 Switching Protocols: Upgrade=websocket, Sec-WebSocket-Accept verified: True\n  <- book_snapshot seq=1 bid=185.48 ask=185.5\n  <- book_snapshot seq=2 bid=185.49 ask=185.51\n  <- book_snapshot seq=3 bid=185.47 ask=185.49\n  <- order_ack     seq=4 status=accepted\nping/pong round trip under 50 ms: True\nclosed with code 1000 (1000 = normal closure)"
-          }
-        },
-        {
-          "name": "FIX: tag=value messages, sequence numbers, heartbeats and resend requests",
-          "explain": "<p>FIX, the Financial Information eXchange protocol, is how brokers, buy-side firms and venues have exchanged orders since the 1990s. A message is a flat list of <code>tag=value</code> fields separated by the SOH byte (0x01, printed as | here). The header starts with <code>8=FIX.4.4</code> and <code>9=</code>, the BodyLength: the byte count from the next field up to the checksum. Tag <code>35</code> is the message type (A Logon, D NewOrderSingle, 8 ExecutionReport, 0 Heartbeat, 1 TestRequest, 2 ResendRequest, 4 SequenceReset); <code>49</code> and <code>56</code> name sender and target, <code>34</code> is MsgSeqNum and <code>52</code> SendingTime. The trailer <code>10=</code> is the byte sum modulo 256, in three digits. The snippet builds a Logon with a 30-second heartbeat interval (108=30) and an order to buy 5 AAPL with a 185.49 limit (54=1 buy, 38 quantity, 40=2 limit, 44 price), validates both, and shows that changing one digit of the quantity breaks the checksum.</p><p>FIX's real contribution is its session layer. Each side numbers every message it sends, and the receiver checks for gaps. The venue in the snippet expects 6, receives 8, and sends a ResendRequest from 6 to the end (7=6, 16=0). The client resends 6 with PossDupFlag 43=Y, so it is not mistaken for a new order, and replaces 7, a heartbeat not worth resending, with a SequenceReset in gap-fill mode (123=Y, 36=8). Then 8 is processed, in order. Silence is handled the same way: no traffic for one heartbeat interval triggers a TestRequest, and no answer to it means the session is dead.</p><p>Against the arena: JSON over WebSocket is self-describing and easy to debug; FIX is terser, standardised for decades, and recoverable after a disconnect without losing an order, because sequence numbers survive a reconnect within the trading day.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\n\nSOH = \"\\x01\"\n\ndef fix(msg_type, seq, body, sender=\"TEAM07\", target=\"ARENA\", when=\"20261016-14:30:00.000\"):\n    \"\"\"Build a FIX 4.4 message: BodyLength (9) counts the bytes after itself up to the checksum\n    field; CheckSum (10) is the byte sum mod 256, three digits.\"\"\"\n    fields = [(\"35\", msg_type), (\"49\", sender), (\"56\", target), (\"34\", str(seq)), (\"52\", when)] + body\n    inner = \"\".join(f\"{t}={v}{SOH}\" for t, v in fields)\n    head = f\"8=FIX.4.4{SOH}9={len(inner)}{SOH}\"\n    cks = sum((head + inner).encode()) % 256\n    return f\"{head}{inner}10={cks:03d}{SOH}\"\n\ndef parse(raw):\n    pairs = [f.split(\"=\", 1) for f in raw.split(SOH) if f]\n    tags = dict(pairs)\n    body_start = raw.index(f\"{SOH}35=\") + 1\n    trailer = raw.rindex(f\"{SOH}10=\") + 1\n    ok_len = int(tags[\"9\"]) == len(raw[body_start:trailer].encode())\n    ok_sum = int(tags[\"10\"]) == sum(raw[:trailer].encode()) % 256\n    return tags, ok_len and ok_sum\n\nshow = lambda raw: raw.replace(SOH, \"|\")\nNAMES = {\"A\": \"Logon\", \"D\": \"NewOrderSingle\", \"8\": \"ExecutionReport\", \"0\": \"Heartbeat\",\n         \"1\": \"TestRequest\", \"2\": \"ResendRequest\", \"4\": \"SequenceReset\"}\n\nlogon = fix(\"A\", 1, [(\"98\", \"0\"), (\"108\", \"30\")])                 # no encryption, 30 s heartbeat\norder = fix(\"D\", 2, [(\"11\", \"ord-0001\"), (\"55\", \"AAPL\"), (\"54\", \"1\"), (\"38\", \"5\"),\n                     (\"40\", \"2\"), (\"44\", \"185.49\"), (\"59\", \"0\")])  # buy 5 AAPL limit 185.49, day\nfor raw in (logon, order):\n    tags, ok = parse(raw)\n    print(f\"{NAMES[tags['35']]:<15} {len(raw):3d} B  valid={ok}  {show(raw)}\")\ntampered = order.replace(\"38=5\", \"38=9\")\nprint(f\"{'tampered qty':<15} {len(tampered):3d} B  valid={parse(tampered)[1]}  (checksum catches it)\")\n\n# the session layer: every message carries MsgSeqNum (34); a gap triggers a ResendRequest\nprint(\"session, venue side: expecting seq 5\")\nexpected, log = 5, []\nfor seq, kind in ((5, \"D\"), (8, \"D\")):                         # 6 and 7 never arrived\n    if seq > expected:\n        req = fix(\"2\", 41, [(\"7\", str(expected)), (\"16\", \"0\")], sender=\"ARENA\", target=\"TEAM07\")\n        log.append(f\"  got 34={seq}, expected {expected} -> ResendRequest 7={expected} 16=0 (BeginSeqNo, 0 = to the end)\")\n        log.append(f\"     {show(req)}\")\n        break\n    log.append(f\"  got 34={seq} {NAMES[kind]} -> accepted\")\n    expected = seq + 1\nprint(\"\\n\".join(log))\nreplay = [fix(\"D\", 6, [(\"43\", \"Y\"), (\"122\", \"20261016-14:30:00.000\"), (\"11\", \"ord-0006\"), (\"55\", \"MSFT\"),\n                       (\"54\", \"2\"), (\"38\", \"3\"), (\"40\", \"1\")]),\n          fix(\"4\", 7, [(\"43\", \"Y\"), (\"123\", \"Y\"), (\"36\", \"8\")])]   # 7 was a heartbeat: skip it\nfor raw in replay:\n    t, ok = parse(raw)\n    extra = \" PossDupFlag=Y (resent)\" if t[\"35\"] == \"D\" else \" GapFill to NewSeqNo=8 (admin msg not resent)\"\n    print(f\"  client resends 34={t['34']} {NAMES[t['35']]}{extra}  valid={ok}\")\nprint(\"  then 34=8 is processed; the stream is whole again\")\n\n# heartbeats: silence for HeartBtInt -> TestRequest; no Heartbeat back -> the session is dead\nhb = 30\nfor silent in (12, 31, 62):\n    act = \"nothing\" if silent < hb else (\"send TestRequest 112=TR1\" if silent < 2 * hb else \"disconnect, log out\")\n    print(f\"  {silent:2d} s since last message from peer -> {act}\")\n",
-            "output": "Logon            88 B  valid=True  8=FIX.4.4|9=66|35=A|49=TEAM07|56=ARENA|34=1|52=20261016-14:30:00.000|98=0|108=30|10=225|\nNewOrderSingle  127 B  valid=True  8=FIX.4.4|9=104|35=D|49=TEAM07|56=ARENA|34=2|52=20261016-14:30:00.000|11=ord-0001|55=AAPL|54=1|38=5|40=2|44=185.49|59=0|10=211|\ntampered qty    127 B  valid=False  (checksum catches it)\nsession, venue side: expecting seq 5\n  got 34=5 NewOrderSingle -> accepted\n  got 34=8, expected 6 -> ResendRequest 7=6 16=0 (BeginSeqNo, 0 = to the end)\n     8=FIX.4.4|9=64|35=2|49=ARENA|56=TEAM07|34=41|52=20261016-14:30:00.000|7=6|16=0|10=107|\n  client resends 34=6 NewOrderSingle PossDupFlag=Y (resent)  valid=True\n  client resends 34=7 SequenceReset GapFill to NewSeqNo=8 (admin msg not resent)  valid=True\n  then 34=8 is processed; the stream is whole again\n  12 s since last message from peer -> nothing\n  31 s since last message from peer -> send TestRequest 112=TR1\n  62 s since last message from peer -> disconnect, log out"
-          }
-        },
-        {
-          "name": "Binary feeds and encodings: ITCH, OUCH, SBE and FAST against JSON",
-          "explain": "<p>Text protocols spend bytes and CPU on what a fixed layout gets for free. NASDAQ's TotalView-ITCH is the canonical binary market-data protocol: every message has a one-byte type and fields at fixed offsets, big-endian, with no names and no delimiters. The snippet packs an ITCH 5.0 Add Order as the specification lays it out, 36 bytes: type A, stock locate, tracking number, a 6-byte timestamp in nanoseconds since midnight, the order reference, B or S, shares, the symbol padded to 8 bytes, and the price as an integer with four implied decimals. It decodes back to buy 500 AAPL at 185.49 at 09:30:00.000000123. OUCH is the matching order-entry protocol: the same style of fixed binary message, sent over a TCP session (SoupBinTCP) rather than multicast (MoldUDP64).</p><p>SBE, Simple Binary Encoding from the FIX Trading Community, generalises the idea: an 8-byte header giving the block length, template, schema and version, then a fixed little-endian block that is read in place, with no parsing pass. CME's MDP 3.0 feed uses it. FAST, its predecessor, compresses instead: integers in stop-bit form (7 bits per byte, the high bit marking the last byte) and fields coded as deltas against the previous message, so five prices take 11 bytes instead of 20.</p><p>The comparison line is the point. One add-order is 28 to 36 bytes in binary, about 80 as FIX tag=value and 123 as the arena's JSON, and decoding 200,000 of them with <code>struct</code> is more than ten times faster than <code>json.loads</code>, even in Python. That is why real feeds are binary and multicast. The arena uses JSON over WebSocket because its subject is software design, and self-describing messages make every bug visible.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport struct\nimport time\n\n# ITCH 5.0 \"Add Order\" (type A): fixed offsets, big-endian, 36 bytes, no field names on the wire\nITCH_ADD = struct.Struct(\"!cHH6sQcI8sI\")\ndef itch_add(locate, ns, ref, side, shares, stock, px):\n    return ITCH_ADD.pack(b\"A\", locate, 0, ns.to_bytes(6, \"big\"), ref, side, shares,\n                         stock.ljust(8).encode(), round(px * 10_000))       # price: 4 implied decimals\n\nmsg = itch_add(locate=13, ns=34_200_000_000_123, ref=880_001, side=b\"B\", shares=500, stock=\"AAPL\", px=185.49)\nt, loc, _, ts, ref, side, sh, stock, px = ITCH_ADD.unpack(msg)\nprint(f\"ITCH Add Order {len(msg)} B: {msg.hex(' ')}\")\nns = int.from_bytes(ts, \"big\")\nhms = f\"{ns // 3_600_000_000_000:02d}:{ns // 60_000_000_000 % 60:02d}:{ns // 1_000_000_000 % 60:02d}.{ns % 1_000_000_000:09d}\"\nprint(f\"  decoded: type={t.decode()} ref={ref} {side.decode()} {sh} {stock.decode().strip()} @ {px / 1e4} at {hms}\")\n\n# SBE (CME MDP 3.0 style): an 8-byte header naming the template, then a fixed little-endian block\nSBE_HDR, SBE_BODY = struct.Struct(\"<HHHH\"), struct.Struct(\"<iqiB3x\")\nbody = SBE_BODY.pack(4321, 185_490_000_000, 500, 1)                          # price mantissa, exponent -9\nsbe = SBE_HDR.pack(SBE_BODY.size, 46, 1, 9) + body                           # blockLength, templateId, schema, version\nbl, tid, sid, ver = SBE_HDR.unpack_from(sbe)\nprint(f\"SBE message {len(sbe)} B: template {tid} v{ver}, block {bl} B -> \"\n      f\"{SBE_BODY.unpack_from(sbe, 8)[1] / 1e9} (read in place, no parsing pass)\")\n\n# FAST: stop-bit integers (7 bits per byte, high bit ends the field) plus delta against the last value\ndef stop_bit(n):\n    out = []\n    while True:\n        out.append(n & 0x7F)\n        n >>= 7\n        if (n == 0 and not out[-1] & 0x40) or (n == -1 and out[-1] & 0x40):\n            break\n    out.reverse()\n    out[-1] |= 0x80\n    return bytes(out)\n\nprices = [1_854_900, 1_854_900, 1_855_000, 1_854_800, 1_854_900]\nfull = b\"\".join(stop_bit(p) for p in prices)\ndelta = b\"\".join(stop_bit(p - q) for p, q in zip(prices, [0] + prices[:-1]))\nprint(f\"FAST 5 prices: absolute {len(full)} B, delta-coded {len(delta)} B  ({delta.hex(' ')})\")\n\nas_json = json.dumps({\"type\": \"add_order\", \"ref\": 880001, \"side\": \"buy\", \"shares\": 500,\n                      \"symbol\": \"AAPL\", \"price\": 185.49, \"ts\": 34200000000123}).encode()\nas_fix = (\"8=FIX.4.4|9=..|35=X|268=1|279=0|269=0|55=AAPL|270=185.49|271=500|37=880001|10=...|\").encode()\nprint(f\"one add-order: ITCH {len(msg)} B | SBE {len(sbe)} B | FIX tag=value ~{len(as_fix)} B | \"\n      f\"JSON {len(as_json)} B\")\n\nN = 200_000\nblob_bin = msg * N\nblob_json = [as_json] * N\nt0 = time.perf_counter()\nn_bin = sum(1 for _ in ITCH_ADD.iter_unpack(blob_bin))\nt1 = time.perf_counter()\nn_json = sum(1 for m in blob_json if json.loads(m))\nt2 = time.perf_counter()\nprint(f\"decode {N:,}: struct {(t1 - t0) * 1e3:6.1f} ms ({(t1 - t0) / N * 1e9:4.0f} ns/msg) | \"\n      f\"json.loads {(t2 - t1) * 1e3:6.1f} ms ({(t2 - t1) / N * 1e9:4.0f} ns/msg) -> x{(t2 - t1) / (t1 - t0):.0f}\")\n",
-            "output": "ITCH Add Order 36 B: 41 00 0d 00 00 1f 1a ce d9 f0 7b 00 00 00 00 00 0d 6d 81 42 00 00 01 f4 41 41 50 4c 20 20 20 20 00 1c 4d b4\n  decoded: type=A ref=880001 B 500 AAPL @ 185.49 at 09:30:00.000000123\nSBE message 28 B: template 46 v9, block 20 B -> 185.49 (read in place, no parsing pass)\nFAST 5 prices: absolute 20 B, delta-coded 11 B  (00 71 1b b4 80 00 e4 7e b8 00 e4)\none add-order: ITCH 36 B | SBE 28 B | FIX tag=value ~82 B | JSON 123 B\ndecode 200,000: struct   13.2 ms (  66 ns/msg) | json.loads  231.2 ms (1156 ns/msg) -> x18"
+            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\n\nHEARTBEAT, TIMEOUT = 1.0, 3.0       # seconds: expect a ping every second, declare dead after three\n\ndef monitor(events):\n    \"\"\"Replay (t, kind, seq) events; detect sequence gaps and silent peers.\"\"\"\n    expected, last_heard, book_ok = 1, 0.0, True\n    for t, kind, seq in events:\n        if t - last_heard > TIMEOUT:\n            print(f\"t={t:5.1f}  silent for {t - last_heard:.1f}s > {TIMEOUT}s -> declare dead, reconnect, resubscribe\")\n            expected, book_ok = seq, False\n        last_heard = t\n        if kind == \"hb\":\n            continue\n        if kind == \"snapshot\":\n            print(f\"t={t:5.1f}  full snapshot seq={seq} -> book rebuilt from scratch\")\n            expected, book_ok = seq + 1, True\n            continue\n        if seq != expected:\n            print(f\"t={t:5.1f}  delta seq={seq}, expected {expected}: GAP of {seq - expected} -> \"\n                  \"discard book, request snapshot\")\n            book_ok, expected = False, seq + 1\n            continue\n        expected += 1\n        if book_ok:\n            print(f\"t={t:5.1f}  delta seq={seq} applied\")\n        else:\n            print(f\"t={t:5.1f}  delta seq={seq} ignored until a snapshot arrives\")\n\nevents = [(0.0, \"snapshot\", 1), (0.4, \"delta\", 2), (0.8, \"delta\", 3), (1.0, \"hb\", 3),\n          (1.3, \"delta\", 5), (1.6, \"delta\", 6), (1.9, \"snapshot\", 6), (2.2, \"delta\", 7),\n          (3.0, \"hb\", 7), (7.5, \"delta\", 12), (7.6, \"snapshot\", 12), (7.9, \"delta\", 13)]\nmonitor(events)\n",
+            "output": "t=  0.0  full snapshot seq=1 -> book rebuilt from scratch\nt=  0.4  delta seq=2 applied\nt=  0.8  delta seq=3 applied\nt=  1.3  delta seq=5, expected 4: GAP of 1 -> discard book, request snapshot\nt=  1.6  delta seq=6 ignored until a snapshot arrives\nt=  1.9  full snapshot seq=6 -> book rebuilt from scratch\nt=  2.2  delta seq=7 applied\nt=  7.5  silent for 4.5s > 3.0s -> declare dead, reconnect, resubscribe\nt=  7.5  delta seq=12 ignored until a snapshot arrives\nt=  7.6  full snapshot seq=12 -> book rebuilt from scratch\nt=  7.9  delta seq=13 applied"
           }
         }
       ],
@@ -769,914 +1153,83 @@ window.COURSES["FINM 33500"] = {
                 "note": "Fills are read only while no hook is blocking."
               }
             ]
-          }
+          },
+          "after": 5
         },
         {
-          "type": "packet-journey",
-          "title": "One message, hop by hop: the headers each layer adds, rewrites and strips",
+          "type": "timeline",
+          "title": "One connection's life, in milliseconds: upgrade, stream, drop, back off, resynchronise",
           "params": {
-            "view": "osi",
-            "scenarios": [
+            "events": [
               {
-                "name": "An order over WebSocket: laptop to venue",
-                "nodes": [
-                  "Bot (Python)",
-                  "Laptop kernel",
-                  "Wi-Fi access point",
-                  "Home router (NAT)",
-                  "ISP router",
-                  "Venue server"
-                ],
-                "steps": [
-                  {
-                    "node": 0,
-                    "title": "ws.send()",
-                    "note": "Your code produced 78 bytes of JSON. Nothing else exists yet.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      }
-                    ]
-                  },
-                  {
-                    "node": 0,
-                    "title": "WebSocket frame",
-                    "note": "The library adds a 2-byte header and, because clients must mask, a 4-byte masking key.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "TLS record",
-                    "note": "Encrypted and authenticated: nobody between you and the venue can read or alter the order.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "TCP segment",
-                    "note": "Ports pick the connection, sequence numbers order the bytes, and the kernel retransmits if no ACK returns.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "51514 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "IP packet",
-                    "note": "Longest-prefix match picks the default route: next hop 192.168.1.1, whose MAC ARP found earlier.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "51514 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "192.168.1.23 → 203.0.113.10  TTL 64  proto 6",
-                        "bytes": 20
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "802.11 frame, on the air",
-                    "note": "On Wi-Fi the link header is 802.11, encrypted with the keys from the WPA handshake.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "51514 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "192.168.1.23 → 203.0.113.10  TTL 64  proto 6",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "802.11",
-                        "fields": "laptop → AP → router MAC, CCMP, LLC/SNAP",
-                        "bytes": 44
-                      },
-                      {
-                        "osi": 1,
-                        "proto": "radio",
-                        "fields": "5 GHz OFDM symbols, preamble"
-                      }
-                    ]
-                  },
-                  {
-                    "node": 2,
-                    "title": "access point bridges",
-                    "note": "A layer-2 bridge: it swaps the Wi-Fi header for Ethernet and leaves layers 3 and up untouched.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "51514 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "192.168.1.23 → 203.0.113.10  TTL 64  proto 6",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "laptop MAC → router MAC  type 0x0800  FCS",
-                        "bytes": 18
-                      },
-                      {
-                        "osi": 1,
-                        "proto": "copper",
-                        "fields": "1000BASE-T"
-                      }
-                    ]
-                  },
-                  {
-                    "node": 3,
-                    "title": "router + NAT",
-                    "note": "A router works at L3: new L2 header, TTL minus 1. NAT also rewrites the source address and port, and both checksums.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "40001 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "198.51.100.7 → 203.0.113.10  TTL 63  proto 6",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "router WAN MAC → ISP MAC  type 0x0800  FCS",
-                        "bytes": 18
-                      },
-                      {
-                        "osi": 1,
-                        "proto": "fibre",
-                        "fields": "GPON upstream"
-                      }
-                    ]
-                  },
-                  {
-                    "node": 4,
-                    "title": "every router after that",
-                    "note": "Each of the dozen or so routers on the way: new link header, TTL minus 1, same IP addresses.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "TCP",
-                        "fields": "40001 → 443  seq 1000001  ack 7000001  PSH ACK",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "198.51.100.7 → 203.0.113.10  TTL 62  proto 6",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "ISP router MAC → next hop MAC  FCS",
-                        "bytes": 18
-                      },
-                      {
-                        "osi": 1,
-                        "proto": "fibre",
-                        "fields": "100G backbone"
-                      }
-                    ]
-                  },
-                  {
-                    "node": 5,
-                    "title": "venue NIC + kernel",
-                    "note": "The server strips L1 to L4, queues the bytes on the socket in sequence order, and ACKs them.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      },
-                      {
-                        "osi": 7,
-                        "proto": "WebSocket",
-                        "fields": "FIN, opcode 1 (text), MASK, len 78",
-                        "bytes": 6
-                      },
-                      {
-                        "osi": 6,
-                        "proto": "TLS 1.3",
-                        "fields": "application_data record, AES-GCM, 16 B tag",
-                        "bytes": 22
-                      }
-                    ]
-                  },
-                  {
-                    "node": 5,
-                    "title": "TLS decrypts, websockets unframes",
-                    "note": "The venue's handler receives exactly the 78 bytes your bot sent, and validates them before anything else.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "JSON",
-                        "fields": "{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",…}",
-                        "bytes": 78
-                      }
-                    ]
-                  }
-                ]
+                "t": 0,
+                "label": "TCP connect",
+                "note": "SYN, SYN-ACK, ACK to port 8765"
               },
               {
-                "name": "A DNS lookup over UDP",
-                "nodes": [
-                  "Bot (Python)",
-                  "Laptop kernel",
-                  "Home router (NAT)",
-                  "DNS resolver"
-                ],
-                "steps": [
-                  {
-                    "node": 0,
-                    "title": "getaddrinfo()",
-                    "note": "The question: the A record of arena.example.org, 35 bytes.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS query",
-                        "fields": "id 0x3350  RD  A? arena.example.org",
-                        "bytes": 35
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "UDP datagram",
-                    "note": "No handshake: 8 bytes of ports, length and checksum, and it is gone.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS query",
-                        "fields": "id 0x3350  RD  A? arena.example.org",
-                        "bytes": 35
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "53000 → 53  len 43",
-                        "bytes": 8
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "IP + Ethernet",
-                    "note": "Sent to the resolver DHCP handed out; ARP already knows the router's MAC.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS query",
-                        "fields": "id 0x3350  RD  A? arena.example.org",
-                        "bytes": 35
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "53000 → 53  len 43",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "192.168.1.23 → 198.51.100.53  TTL 64  proto 17",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "laptop MAC → router MAC  type 0x0800",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 2,
-                    "title": "NAT",
-                    "note": "Even UDP gets a mapping, kept for a short idle timeout, so the answer can come back.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS query",
-                        "fields": "id 0x3350  RD  A? arena.example.org",
-                        "bytes": 35
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "40017 → 53  len 43",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "198.51.100.7 → 198.51.100.53  TTL 63  proto 17",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "router WAN MAC → ISP MAC",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 3,
-                    "title": "the resolver answers",
-                    "note": "Same id, the question echoed, one A record with a 60 s TTL: 51 bytes.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS answer",
-                        "fields": "id 0x3350  QR RD RA  A 203.0.113.10  TTL 60",
-                        "bytes": 51
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "53 → 40017  len 59",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "198.51.100.53 → 198.51.100.7  TTL 58  proto 17",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "ISP MAC → router WAN MAC",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 2,
-                    "title": "NAT maps it back",
-                    "note": "Port 40017 is in the table, so the reply is rewritten to 192.168.1.23:53000.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS answer",
-                        "fields": "id 0x3350  QR RD RA  A 203.0.113.10  TTL 60",
-                        "bytes": 51
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "53 → 53000  len 59",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "198.51.100.53 → 192.168.1.23  TTL 57  proto 17",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "router MAC → laptop MAC",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 0,
-                    "title": "the address is cached",
-                    "note": "One round trip, no connection. If the datagram had been lost, the stub resolver would simply ask again.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "DNS answer",
-                        "fields": "id 0x3350  QR RD RA  A 203.0.113.10  TTL 60",
-                        "bytes": 51
-                      }
-                    ]
-                  }
-                ]
+                "t": 2,
+                "label": "HTTP GET + Upgrade",
+                "note": "Sec-WebSocket-Key sent once"
               },
               {
-                "name": "Market data by multicast, inside a colocation centre",
-                "nodes": [
-                  "Matching engine",
-                  "Feed publisher",
-                  "Exchange switch",
-                  "Your feed handler"
-                ],
-                "steps": [
-                  {
-                    "node": 0,
-                    "title": "an order rests",
-                    "note": "The engine emits one ITCH Add Order: 36 bytes at fixed offsets.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "MoldUDP64 packet",
-                    "note": "Session, 64-bit sequence number, message count, then a 2-byte length before each message.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      },
-                      {
-                        "osi": 5,
-                        "proto": "MoldUDP64",
-                        "fields": "session 000000A1  seq 4,817,203  count 1",
-                        "bytes": 22
-                      }
-                    ]
-                  },
-                  {
-                    "node": 1,
-                    "title": "UDP to a group",
-                    "note": "One datagram to a multicast group, published again on the B line by a separate path.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      },
-                      {
-                        "osi": 5,
-                        "proto": "MoldUDP64",
-                        "fields": "session 000000A1  seq 4,817,203  count 1",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "→ port 26477  no handshake, no ACK",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "10.0.0.5 → 233.54.12.1 (group)  TTL 32",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "→ 01:00:5e:36:0c:01 (group MAC)",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 2,
-                    "title": "the switch replicates",
-                    "note": "IGMP snooping: the frame is copied only to ports whose hosts joined the group. Nothing is rewritten.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      },
-                      {
-                        "osi": 5,
-                        "proto": "MoldUDP64",
-                        "fields": "session 000000A1  seq 4,817,203  count 1",
-                        "bytes": 22
-                      },
-                      {
-                        "osi": 4,
-                        "proto": "UDP",
-                        "fields": "→ port 26477  no handshake, no ACK",
-                        "bytes": 8
-                      },
-                      {
-                        "osi": 3,
-                        "proto": "IPv4",
-                        "fields": "10.0.0.5 → 233.54.12.1 (group)  TTL 32",
-                        "bytes": 20
-                      },
-                      {
-                        "osi": 2,
-                        "proto": "Ethernet",
-                        "fields": "→ 01:00:5e:36:0c:01 (group MAC)",
-                        "bytes": 18
-                      }
-                    ]
-                  },
-                  {
-                    "node": 3,
-                    "title": "the handler checks the sequence",
-                    "note": "Expected 4,817,203: apply it. A higher number means a gap: try the B line, then the retransmission server.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      },
-                      {
-                        "osi": 5,
-                        "proto": "MoldUDP64",
-                        "fields": "session 000000A1  seq 4,817,203  count 1",
-                        "bytes": 22
-                      }
-                    ]
-                  },
-                  {
-                    "node": 3,
-                    "title": "decoded into the book",
-                    "note": "struct-style unpacking at fixed offsets: no parsing, no field names, a few tens of nanoseconds in C.",
-                    "layers": [
-                      {
-                        "osi": 7,
-                        "proto": "ITCH Add Order",
-                        "fields": "A  ref 880001  B 500 AAPL @ 185.4900",
-                        "bytes": 36
-                      }
-                    ]
-                  }
-                ]
+                "t": 3,
+                "label": "101 Switching Protocols",
+                "note": "Sec-WebSocket-Accept checked"
+              },
+              {
+                "t": 5,
+                "label": "Handshake (team, role)",
+                "note": "first typed client message"
+              },
+              {
+                "t": 8,
+                "label": "BookSnapshot stream",
+                "note": "full snapshot per symbol"
+              },
+              {
+                "t": 500,
+                "label": "PlaceOrder",
+                "note": "model_dump_json on the wire"
+              },
+              {
+                "t": 502,
+                "label": "OrderAck",
+                "note": "queue_ahead tells your place in line"
+              },
+              {
+                "t": 503,
+                "label": "TradeExecution",
+                "note": "fee and maker/taker attribution"
+              },
+              {
+                "t": 1500,
+                "label": "heartbeat missed x3",
+                "note": "peer declared dead"
+              },
+              {
+                "t": 1501,
+                "label": "back off 1 s",
+                "note": "exponential, with jitter"
+              },
+              {
+                "t": 2501,
+                "label": "reconnect + resubscribe",
+                "note": "old book discarded"
+              },
+              {
+                "t": 2510,
+                "label": "fresh snapshot",
+                "note": "state rebuilt from the venue"
               }
             ]
           }
-        },
-        {
-          "type": "transport-ladder",
-          "title": "TCP against UDP on a timeline: handshake, Nagle, a lost packet and head-of-line blocking",
-          "params": {
-            "mode": "both",
-            "rtt": 20,
-            "msgs": 4,
-            "gap": 4,
-            "nagle": false,
-            "tls": false,
-            "loss": true,
-            "seed": 33503
-          }
         }
       ],
-      "pitfalls": [
-        "Calling time.sleep, requests or a heavy pandas job inside on_tick. It freezes the socket reader too; offload with asyncio.to_thread or move it off the hot path.",
-        "Reconnecting in a tight loop, or keeping the old book after a reconnect. Back off with jitter and rebuild state from the venue.",
-        "Leaving Nagle on for order entry, or writing one message in several send calls. Set TCP_NODELAY and write each message with one sendall.",
-        "Treating a UDP feed as reliable. Without sequence checks, A/B arbitration and a gap-fill or snapshot path, one lost datagram leaves a wrong book that no later message repairs."
-      ],
-      "check": [
-        {
-          "q": "A client sends a 16-byte header and a 48-byte body in two send() calls, then waits for the reply. Between two Linux hosts every request takes about 40 ms more than the round-trip time. Most likely cause?",
-          "options": [
-            "UDP packet loss on the path",
-            "Nagle's algorithm holds the body until the delayed ACK of the header; set TCP_NODELAY or write once",
-            "A DNS lookup before every request",
-            "The MTU is too small for 64 bytes"
-          ],
-          "answer": 1,
-          "why": "Write-write-read with Nagle on waits for the receiver's delayed ACK (up to 40 ms on Linux). TCP_NODELAY, or one write per message, removes it."
-        },
-        {
-          "q": "Why do exchanges publish market data as UDP multicast on two lines, A and B?",
-          "options": [
-            "Because UDP guarantees delivery",
-            "One datagram reaches every subscriber, and two independent copies let a receiver fill most gaps by arbitration, with no retransmission request",
-            "Because multicast traffic is encrypted",
-            "Because TCP cannot carry binary messages"
-          ],
-          "answer": 1,
-          "why": "Multicast scales to every subscriber at once; sequence numbers expose losses, and the second line usually holds the missing packet."
-        },
-        {
-          "q": "A FIX engine expecting MsgSeqNum 6 receives a message with 34=8. What should it do?",
-          "options": [
-            "Process 8 and ignore the gap",
-            "Send a ResendRequest from 6 (7=6, 16=0), and process 8 only once 6 and 7 are resent or gap-filled",
-            "Drop the session at once",
-            "Reset its own expected sequence number to 8"
-          ],
-          "answer": 1,
-          "why": "The session layer guarantees in-order, complete delivery: recover the gap (PossDup resends or a SequenceReset gap fill) before moving on."
-        },
-        {
-          "q": "Your laptop is 192.168.1.23 behind a home router. Why can the venue not open a connection to your bot?",
-          "options": [
-            "Private addresses are not routed on the Internet, and the NAT has no mapping for an unsolicited inbound packet",
-            "TCP does not let servers open connections",
-            "DNS cannot resolve laptops",
-            "WebSockets only carry data from client to server"
-          ],
-          "answer": 0,
-          "why": "NAT only maps flows started from inside. The bot dials out, and the venue pushes data down that same open connection."
-        }
-      ]
-    },
-    {
-      "n": 4,
-      "title": "Session 3 · Socket streaming and protocols: typed WebSocket schemas, heartbeats, reconnection",
-      "topics": [
-        "the network stack in brief; TCP versus UDP",
-        "sockets, request/response, streaming and pub/sub",
-        "why WebSockets rather than HTTP polling; the upgrade handshake",
-        "framing and serialisation: where a message ends",
-        "a protocol is a versioned contract: schemas, discriminated unions, validation at the boundary",
-        "malformed and unknown messages; heartbeats, sequence numbers and reconnection",
-        "capability you leave with: typed WebSocket schemas, heartbeats, reconnection"
-      ],
-      "concepts": [
-        {
-          "name": "TCP hands you bytes, not messages: framing with a delimiter or a length prefix",
-          "explain": "<p>TCP guarantees that bytes arrive complete and in order. It guarantees nothing about where one message ends: two <code>sendall</code> calls can arrive as one <code>recv</code>, and one message can arrive across three. The snippet takes two 41-byte JSON orders and shows both failures of the naive reader, <code>json.loads(recv())</code>: the coalesced 82 bytes raise <em>Extra data</em>, and the split version raises on its first fragment.</p><p>The two classic fixes are a delimiter and a length prefix. A delimiter reader appends every chunk to a buffer, splits on the separator and keeps the incomplete tail for next time; it needs a separator that cannot occur inside a message, which newline-delimited JSON satisfies. A length-prefix reader waits until it has four bytes of big-endian length plus that many bytes of body; it works for any payload, including binary, and is what most exchange protocols use. The snippet feeds both readers the same stream cut three ways, whole, at arbitrary offsets and one byte at a time, and both recover <code>['AAPL', 'MSFT']</code> every time. A reader that is correct only for the chunking your laptop happens to produce is not correct.</p><p>In the lab this is step 1 (<em>TCP has no messages, only bytes</em>): <code>framing.py</code> delays the server's first read so both sends pile up, and you name the two fixes at the checkpoint. In the arena you never write this reader, because WebSocket framing (next concept) does it for you, but the same bug reappears whenever someone reads a raw TCP feed or tails a log file mid-write.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nimport struct\n\nm1 = json.dumps({\"type\": \"place_order\", \"symbol\": \"AAPL\"}).encode()\nm2 = json.dumps({\"type\": \"place_order\", \"symbol\": \"MSFT\"}).encode()\n\n# what TCP may deliver for two sendall() calls: any re-chunking of the same bytes\nstream = m1 + m2\nchunkings = {\"coalesced\": [stream], \"split\": [stream[:20], stream[20:61], stream[61:]]}\nfor name, chunks in chunkings.items():\n    print(f\"{name:<10} recv sizes {[len(c) for c in chunks]}\")\n    try:\n        print(\"   naive json.loads(recv) ->\", [json.loads(c)[\"symbol\"] for c in chunks])\n    except json.JSONDecodeError as e:\n        print(\"   naive json.loads(recv) -> JSONDecodeError:\", e.msg)\n\ndef delimited(chunks, sep=b\"\\n\"):\n    \"\"\"Fix 1: a delimiter. Buffer, split, keep the incomplete tail.\"\"\"\n    buf, out = b\"\", []\n    for c in chunks:\n        buf += c\n        *whole, buf = buf.split(sep)\n        out += [json.loads(w)[\"symbol\"] for w in whole]\n    return out\n\ndef length_prefixed(chunks):\n    \"\"\"Fix 2: a 4-byte big-endian length before every message.\"\"\"\n    buf, out = b\"\", []\n    for c in chunks:\n        buf += c\n        while len(buf) >= 4 and len(buf) >= 4 + struct.unpack(\">I\", buf[:4])[0]:\n            n = struct.unpack(\">I\", buf[:4])[0]\n            out.append(json.loads(buf[4:4 + n])[\"symbol\"])\n            buf = buf[4 + n:]\n    return out\n\nnl = m1 + b\"\\n\" + m2 + b\"\\n\"\nlp = struct.pack(\">I\", len(m1)) + m1 + struct.pack(\">I\", len(m2)) + m2\nfor cuts in ([len(nl)], [7, 30, 58], [1] * 10):\n    parts, i = [], 0\n    for k in cuts:\n        parts.append(nl[i:i + k]); i += k\n    parts.append(nl[i:])\n    lparts, i = [], 0\n    for k in cuts:\n        lparts.append(lp[i:i + k]); i += k\n    lparts.append(lp[i:])\n    print(f\"cuts {str(cuts):<32} delimiter -> {delimited(parts)}   length-prefix -> {length_prefixed(lparts)}\")\n",
-            "output": "coalesced  recv sizes [82]\n   naive json.loads(recv) -> JSONDecodeError: Extra data\nsplit      recv sizes [20, 41, 21]\n   naive json.loads(recv) -> JSONDecodeError: Unterminated string starting at\ncuts [84]                             delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']\ncuts [7, 30, 58]                      delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']\ncuts [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]   delimiter -> ['AAPL', 'MSFT']   length-prefix -> ['AAPL', 'MSFT']"
-          }
-        },
-        {
-          "name": "The WebSocket upgrade: one HTTP handshake, then full-duplex framed messages",
-          "explain": "<p>HTTP polling asks \"anything new?\" on a timer and pays a request, headers and latency every time. A market needs the server to push the moment something changes, and the client to send orders on the same connection. WebSocket starts as one ordinary HTTP request carrying <code>Upgrade: websocket</code> and a random <code>Sec-WebSocket-Key</code>; the server answers <code>101 Switching Protocols</code> with <code>Sec-WebSocket-Accept</code>, the base64 SHA-1 of the key concatenated with a fixed GUID; from then on the same TCP socket carries framed messages in both directions.</p><p>The snippet computes the accept value for the RFC 6455 example key and reproduces the RFC's answer, <code>s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code>. It then frames a 78-byte order the way a client must: one header byte for FIN plus opcode (<code>0x81</code>, a final text frame), one byte for the mask bit and the length (<code>0xce</code> = masked, 78), four mask bytes, and the payload XORed with them, 84 bytes in all. The server unframes it back to the identical bytes. Payloads of 126 bytes or more switch to a 16-bit extended length, visible in the 300-byte frame's <code>7e 01 2c</code>. Clients mask so that intermediaries cannot be tricked into caching attacker-chosen bytes; servers do not mask.</p><p>In the lab this is step 2 (<em>The upgrade, by hand</em>): you open a raw socket to your own exchange, send the request and read <code>HTTP/1.1 101 Switching Protocols</code> back. In the arena the <code>websockets</code> library does all of this; knowing the bytes is what lets you debug a proxy or a TLS terminator that silently strips the upgrade.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport base64\nimport hashlib\nimport os\nimport struct\n\nGUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\"          # fixed by RFC 6455\n\ndef accept_key(client_key):\n    return base64.b64encode(hashlib.sha1((client_key + GUID).encode()).digest()).decode()\n\nkey = \"dGhlIHNhbXBsZSBub25jZQ==\"                          # the RFC's own example nonce\nrequest = (\"GET / HTTP/1.1\\r\\nHost: localhost:8765\\r\\nUpgrade: websocket\\r\\n\"\n           \"Connection: Upgrade\\r\\nSec-WebSocket-Key: \" + key + \"\\r\\nSec-WebSocket-Version: 13\\r\\n\\r\\n\")\nresponse = (\"HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\n\"\n            \"Sec-WebSocket-Accept: \" + accept_key(key) + \"\\r\\n\\r\\n\")\nprint(request.splitlines()[0], \"...\", len(request), \"bytes, once\")\nprint(response.splitlines()[0])\nprint(\"Sec-WebSocket-Accept:\", accept_key(key), \"(RFC 6455 expects s3pPLMBiTxaQ9kYGzzhZRbK+xOo=)\")\n\ndef frame(payload: bytes, mask_key: bytes | None):\n    \"\"\"A single final text frame. Clients MUST mask; servers must not.\"\"\"\n    b0 = 0x80 | 0x1                                           # FIN + opcode text\n    n = len(payload)\n    mbit = 0x80 if mask_key else 0\n    head = struct.pack(\"!BB\", b0, mbit | n) if n < 126 else struct.pack(\"!BBH\", b0, mbit | 126, n)\n    if mask_key:\n        payload = bytes(c ^ mask_key[i % 4] for i, c in enumerate(payload))\n        return head + mask_key + payload\n    return head + payload\n\ndef unframe(data: bytes):\n    fin, op = data[0] >> 7, data[0] & 0x0F\n    masked, n, i = data[1] >> 7, data[1] & 0x7F, 2\n    if n == 126:\n        n, i = struct.unpack(\"!H\", data[2:4])[0], 4\n    if masked:\n        k, i = data[i:i + 4], i + 4\n        return fin, op, bytes(c ^ k[j % 4] for j, c in enumerate(data[i:i + n]))\n    return fin, op, data[i:i + n]\n\nmsg = b'{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}'\nmask = bytes([0x37, 0xFA, 0x21, 0x3D])        # fixed here; a real client draws os.urandom(4)\nwire = frame(msg, mask)\nprint(f\"payload {len(msg)} B -> client frame {len(wire)} B (2 header + 4 mask)\")\nprint(\"first bytes on the wire:\", wire[:8].hex(\" \"))\nfin, op, back = unframe(wire)\nprint(f\"server unframes: fin={fin} opcode={op} (text) equal={back == msg}\")\nbig = frame(b\"x\" * 300, None)\nprint(\"300-byte server frame header:\", big[:4].hex(\" \"), \"-> 126 means a 16-bit length follows\")\n",
-            "output": "GET / HTTP/1.1 ... 153 bytes, once\nHTTP/1.1 101 Switching Protocols\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo= (RFC 6455 expects s3pPLMBiTxaQ9kYGzzhZRbK+xOo=)\npayload 78 B -> client frame 84 B (2 header + 4 mask)\nfirst bytes on the wire: 81 ce 37 fa 21 3d 4c d8\nserver unframes: fin=1 opcode=1 (text) equal=True\n300-byte server frame header: 81 7e 01 2c -> 126 means a 16-bit length follows"
-          }
-        },
-        {
-          "name": "A protocol is a versioned contract: typed models, a discriminated union, round-trip and reject",
-          "explain": "<p>Framing says where a message ends; the schema says what it means. The arena's message module is the contract between every process: two discriminated unions split by direction, eight message types a client may send and nine the venue may send back, each with a literal <code>type</code> field that tells the dispatcher which model to build. A contract has three properties you can test: a lossless round-trip, bad data that cannot be constructed, and a versioning rule that lets old and new peers talk.</p><p>The snippet implements a small pydantic in plain Python to show there is no magic. Dataclass fields carry the types; <code>__post_init__</code> checks every field against its annotation, including <code>Literal</code> and <code>Optional</code>, and reports all violations at once; <code>model_dump_json</code> and <code>parse_message</code> go to the wire and back. The order round-trips equal. Side <code>'long'</code> is rejected, a missing price is rejected, and a string price with a fractional quantity produces two errors in one message. An <code>order_ack</code> from an older venue that lacks <code>queue_ahead</code> still parses, because fields added later carry defaults: add optional fields, never repurpose old ones. An unknown tag fails loudly at the boundary.</p><p>In the lab this is steps 3 and 4 (<em>The contract</em> and <em>Round-trip, reject, and version</em>) against the real pydantic models: 21 known types, the same four experiments, and the observation that a <code>Literal</code> makes an illegal state unrepresentable rather than merely detected. In the arena the rule is written into the codebase itself: every message is a model, sent with <code>model_dump_json()</code> and parsed with the model class, never a raw dict.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nfrom dataclasses import dataclass, asdict, fields, MISSING\nfrom typing import Literal, Optional, get_args, get_origin, get_type_hints\n\nclass ValidationError(ValueError):\n    pass\n\ndef _check(name, tp, v):\n    if get_origin(tp) is Literal:\n        return None if v in get_args(tp) else f\"{name}: input should be one of {get_args(tp)}\"\n    if get_origin(tp) is not None and type(None) in get_args(tp):          # Optional[X]\n        return None if v is None else _check(name, [a for a in get_args(tp) if a is not type(None)][0], v)\n    if tp is float:\n        return None if isinstance(v, (int, float)) and not isinstance(v, bool) else f\"{name}: must be a number\"\n    if tp is int:\n        return None if isinstance(v, int) and not isinstance(v, bool) else f\"{name}: must be an integer\"\n    return None if isinstance(v, tp) else f\"{name}: must be {tp.__name__}\"\n\nclass Model:\n    \"\"\"A tiny pydantic: validate on construction, dump to JSON, parse from JSON.\"\"\"\n    def __post_init__(self):\n        hints = get_type_hints(type(self))\n        errs = [e for f in fields(self) if (e := _check(f.name, hints[f.name], getattr(self, f.name)))]\n        if errs:\n            raise ValidationError(f\"{len(errs)} validation error(s) for {type(self).__name__}: \" + \"; \".join(errs))\n    def model_dump_json(self):\n        return json.dumps(asdict(self), separators=(\",\", \":\"))\n    @classmethod\n    def model_validate(cls, d):\n        missing = [f.name for f in fields(cls) if f.default is MISSING and f.name not in d]\n        if missing:\n            raise ValidationError(f\"{cls.__name__}: field required: {missing}\")\n        return cls(**{f.name: d[f.name] for f in fields(cls) if f.name in d})\n\n@dataclass\nclass PlaceOrder(Model):\n    team_id: str\n    symbol: str\n    side: Literal[\"buy\", \"sell\"]\n    order_type: Literal[\"limit\", \"market\", \"post_only\", \"ioc\"]\n    price: Optional[float]\n    quantity: int\n    type: Literal[\"place_order\"] = \"place_order\"\n    stop_price: Optional[float] = None                 # added later, with a default\n\n@dataclass\nclass OrderAck(Model):\n    order_id: str\n    symbol: str\n    side: Literal[\"buy\", \"sell\"]\n    price: float\n    quantity: int\n    type: Literal[\"order_ack\"] = \"order_ack\"\n    queue_ahead: int = 0                                # added mid-season, with a default\n    level_qty: int = 0\n\nTYPE_MAP = {\"place_order\": PlaceOrder, \"order_ack\": OrderAck}   # the discriminated union\n\ndef parse_message(raw: str):\n    d = json.loads(raw)\n    cls = TYPE_MAP.get(d.get(\"type\"))\n    if cls is None:\n        raise KeyError(f\"Unknown message type: {d.get('type')!r}\")\n    return cls.model_validate(d)\n\no = PlaceOrder(\"me\", \"AAPL\", \"buy\", \"limit\", 185.50, 5)\nwire = o.model_dump_json()\nprint(\"wire:\", wire)\nprint(\"round-trip equal?\", parse_message(wire) == o)\nfor bad in ('{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"long\",\"order_type\":\"limit\",\"price\":1.0,\"quantity\":1}',\n            '{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"quantity\":1}',\n            '{\"type\":\"place_order\",\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"price\":\"185.5\",\"quantity\":1.5}'):\n    try:\n        parse_message(bad)\n    except ValidationError as e:\n        print(\"rejected:\", e)\nold = parse_message('{\"type\":\"order_ack\",\"order_id\":\"a1\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}')\nprint(type(old).__name__, \"from an older venue parses: queue_ahead =\", old.queue_ahead, \"level_qty =\", old.level_qty)\ntry:\n    parse_message('{\"type\":\"place_ordr\",\"symbol\":\"AAPL\"}')\nexcept KeyError as e:\n    print(\"unknown type ->\", e)\n",
-            "output": "wire: {\"team_id\":\"me\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"order_type\":\"limit\",\"price\":185.5,\"quantity\":5,\"type\":\"place_order\",\"stop_price\":null}\nround-trip equal? True\nrejected: 1 validation error(s) for PlaceOrder: side: input should be one of ('buy', 'sell')\nrejected: PlaceOrder: field required: ['price']\nrejected: 2 validation error(s) for PlaceOrder: price: must be a number; quantity: must be an integer\nOrderAck from an older venue parses: queue_ahead = 0 level_qty = 0\nunknown type -> \"Unknown message type: 'place_ordr'\""
-          }
-        },
-        {
-          "name": "Three ways input is wrong, and none may kill the session",
-          "explain": "<p>A public endpoint receives garbage: truncated frames, typos in the tag, fields of the wrong type, valid JSON of the wrong shape. The rule for a venue is that one bad frame must never take down a session, neither the sender's nor anyone else's. The inbound guard therefore distinguishes three failures, in order of cost: the bytes are not JSON; the JSON has no known <code>type</code>; the type is known but the fields fail validation. Each produces an error reply and a <code>continue</code>, never a <code>raise</code>, and the whole handler sits inside a last-resort <code>except</code> so that a bug in the guard itself degrades to an internal error rather than a dropped connection.</p><p>The snippet feeds six frames through such a guard: a valid order gets an ack; a truncated frame, a misspelt tag, a known tag with a bad side, and a JSON list each get a <code>PARSE_ERROR</code> naming the problem; a valid cancel afterwards still works. The session is open at the end, with one ack, four errors and one cancel ack.</p><p>In the lab this is step 5 (<em>The venue enforces it too</em>): you read the server's four-line inbound guard, send an invalid order and an unknown tag from a script, receive two <code>ErrorMsg</code> replies (<em>5 validation errors for PlaceOrder</em> and <em>Unknown message type</em>) and confirm the connection stayed open. In the arena exchange teams inherit this guard; a venue that crashes on a malformed frame loses every connected team at once, and reliability is the first thing an exchange team competes on.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\nimport json\nfrom collections import Counter\n\nVALID = {\"place_order\": {\"symbol\", \"side\", \"price\", \"quantity\"}, \"cancel_order\": {\"order_id\"}}\n\ndef handle(raw):\n    \"\"\"The venue's inbound guard: three ways input is wrong, none may end the session.\"\"\"\n    try:\n        d = json.loads(raw)                                   # 1. not JSON at all\n    except json.JSONDecodeError as e:\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\", \"message\": f\"invalid JSON: {e.msg}\"}\n    t = d.get(\"type\") if isinstance(d, dict) else None\n    if t not in VALID:                                        # 2. unknown or missing tag\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\", \"message\": f\"Unknown message type: {t!r}\"}\n    missing = VALID[t] - d.keys()                             # 3. known tag, bad fields\n    if missing or (t == \"place_order\" and d.get(\"side\") not in (\"buy\", \"sell\")):\n        return {\"type\": \"error\", \"code\": \"PARSE_ERROR\",\n                \"message\": f\"{len(missing) + (d.get('side') not in ('buy', 'sell'))} validation errors for {t}\"}\n    return {\"type\": \"order_ack\" if t == \"place_order\" else \"cancel_ack\"}\n\nframes = [\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"price\":185.5,\"quantity\":5}',\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"long\"',             # truncated\n    '{\"type\":\"place_ordr\",\"symbol\":\"AAPL\"}',                           # typo in the tag\n    '{\"type\":\"place_order\",\"symbol\":\"AAPL\",\"side\":\"long\"}',            # bad fields\n    '[1, 2, 3]',                                                       # JSON, wrong shape\n    '{\"type\":\"cancel_order\",\"order_id\":\"a1\"}',\n]\nsession_open, replies = True, Counter()\nfor i, raw in enumerate(frames, 1):\n    try:\n        r = handle(raw)\n    except Exception:                                          # belt and braces: never raise out\n        r = {\"type\": \"error\", \"code\": \"INTERNAL\"}\n    replies[r[\"type\"]] += 1\n    print(f\"frame {i}: {r['type']:<10} {r.get('message', '')}\")\nprint(f\"session still open: {session_open}   replies: {dict(replies)}\")\n",
-            "output": "frame 1: order_ack\nframe 2: error      invalid JSON: Expecting ',' delimiter\nframe 3: error      Unknown message type: 'place_ordr'\nframe 4: error      3 validation errors for place_order\nframe 5: error      Unknown message type: None\nframe 6: cancel_ack\nsession still open: True   replies: {'order_ack': 1, 'error': 4, 'cancel_ack': 1}"
-          }
-        },
-        {
-          "name": "Heartbeats and sequence numbers: detecting a dead peer and a missing message",
-          "explain": "<p>TCP will tell you when a connection closes cleanly. It will not tell you quickly when the peer has silently gone away, and it cannot tell you that a message you needed was never sent because the publisher restarted. Two small mechanisms cover both. A heartbeat, a message expected every second, turns silence into a signal: after a timeout of several missed beats the client declares the connection dead, reconnects and resubscribes. A sequence number on every incremental update turns a missing message into a gap you can see: when delta 5 arrives while you expected 4, the book you hold is wrong and the only safe move is to discard it and ask for a full snapshot.</p><p>The snippet replays a scripted stream. Deltas 2 and 3 apply; delta 5 reveals a gap of one, the book is discarded, delta 6 is ignored until the snapshot at 1.9 s rebuilds it; then the stream goes silent for 4.5 s, beyond the 3 s timeout, so the client declares the peer dead, reconnects, ignores the first delta and resynchronises from the next snapshot. A replay can only notice silence when the next event arrives; a live client runs the same check on a timer, so it would have declared the peer dead at 6.0 s.</p><p>In the lab the <code>BookSnapshot</code> you stream in step 6 (<em>Talk to the exchange by hand</em>) is a full snapshot every time, which is why the arena's feed is simple to consume; the deck's <em>Backpressure, Heartbeats &amp; Reconnection</em> slide covers the incremental case every real exchange feed uses. In the arena the engine rebuilds <code>MarketData</code> on every reconnect for exactly this reason, and week 9 kills the venue on purpose to watch it happen.</p>",
-          "code": {
-            "lang": "python",
-            "src": "import numpy as np\nnp.seterr(all=\"ignore\")\n\nHEARTBEAT, TIMEOUT = 1.0, 3.0       # seconds: expect a ping every second, declare dead after three\n\ndef monitor(events):\n    \"\"\"Replay (t, kind, seq) events; detect sequence gaps and silent peers.\"\"\"\n    expected, last_heard, book_ok = 1, 0.0, True\n    for t, kind, seq in events:\n        if t - last_heard > TIMEOUT:\n            print(f\"t={t:5.1f}  silent for {t - last_heard:.1f}s > {TIMEOUT}s -> declare dead, reconnect, resubscribe\")\n            expected, book_ok = seq, False\n        last_heard = t\n        if kind == \"hb\":\n            continue\n        if kind == \"snapshot\":\n            print(f\"t={t:5.1f}  full snapshot seq={seq} -> book rebuilt from scratch\")\n            expected, book_ok = seq + 1, True\n            continue\n        if seq != expected:\n            print(f\"t={t:5.1f}  delta seq={seq}, expected {expected}: GAP of {seq - expected} -> \"\n                  \"discard book, request snapshot\")\n            book_ok, expected = False, seq + 1\n            continue\n        expected += 1\n        if book_ok:\n            print(f\"t={t:5.1f}  delta seq={seq} applied\")\n        else:\n            print(f\"t={t:5.1f}  delta seq={seq} ignored until a snapshot arrives\")\n\nevents = [(0.0, \"snapshot\", 1), (0.4, \"delta\", 2), (0.8, \"delta\", 3), (1.0, \"hb\", 3),\n          (1.3, \"delta\", 5), (1.6, \"delta\", 6), (1.9, \"snapshot\", 6), (2.2, \"delta\", 7),\n          (3.0, \"hb\", 7), (7.5, \"delta\", 12), (7.6, \"snapshot\", 12), (7.9, \"delta\", 13)]\nmonitor(events)\n",
-            "output": "t=  0.0  full snapshot seq=1 -> book rebuilt from scratch\nt=  0.4  delta seq=2 applied\nt=  0.8  delta seq=3 applied\nt=  1.3  delta seq=5, expected 4: GAP of 1 -> discard book, request snapshot\nt=  1.6  delta seq=6 ignored until a snapshot arrives\nt=  1.9  full snapshot seq=6 -> book rebuilt from scratch\nt=  2.2  delta seq=7 applied\nt=  7.5  silent for 4.5s > 3.0s -> declare dead, reconnect, resubscribe\nt=  7.5  delta seq=12 ignored until a snapshot arrives\nt=  7.6  full snapshot seq=12 -> book rebuilt from scratch\nt=  7.9  delta seq=13 applied"
-          }
-        }
-      ],
-      "widget": {
-        "type": "timeline",
-        "title": "One connection's life, in milliseconds: upgrade, stream, drop, back off, resynchronise",
-        "params": {
-          "events": [
-            {
-              "t": 0,
-              "label": "TCP connect",
-              "note": "SYN, SYN-ACK, ACK to port 8765"
-            },
-            {
-              "t": 2,
-              "label": "HTTP GET + Upgrade",
-              "note": "Sec-WebSocket-Key sent once"
-            },
-            {
-              "t": 3,
-              "label": "101 Switching Protocols",
-              "note": "Sec-WebSocket-Accept checked"
-            },
-            {
-              "t": 5,
-              "label": "Handshake (team, role)",
-              "note": "first typed client message"
-            },
-            {
-              "t": 8,
-              "label": "BookSnapshot stream",
-              "note": "full snapshot per symbol"
-            },
-            {
-              "t": 500,
-              "label": "PlaceOrder",
-              "note": "model_dump_json on the wire"
-            },
-            {
-              "t": 502,
-              "label": "OrderAck",
-              "note": "queue_ahead tells your place in line"
-            },
-            {
-              "t": 503,
-              "label": "TradeExecution",
-              "note": "fee and maker/taker attribution"
-            },
-            {
-              "t": 1500,
-              "label": "heartbeat missed x3",
-              "note": "peer declared dead"
-            },
-            {
-              "t": 1501,
-              "label": "back off 1 s",
-              "note": "exponential, with jitter"
-            },
-            {
-              "t": 2501,
-              "label": "reconnect + resubscribe",
-              "note": "old book discarded"
-            },
-            {
-              "t": 2510,
-              "label": "fresh snapshot",
-              "note": "state rebuilt from the venue"
-            }
-          ]
-        }
-      },
       "pitfalls": [
         "json.loads(sock.recv(4096)) on a raw TCP stream. It works on your laptop and fails on the first coalesced or split read.",
-        "Sending hand-built dicts or f-string JSON. A typo in a field name is silently ignored or rejected downstream; build the model and dump it.",
-        "Repurposing an existing field when the protocol changes. Add a new optional field with a default so older peers keep working.",
-        "Letting one malformed inbound frame raise out of the handler. Reply with an error and continue; the session must survive."
+        "Letting one malformed inbound frame raise out of the handler. Reply with an error and continue; the session must survive.",
+        "Calling time.sleep, requests or a heavy pandas job inside on_tick. It freezes the socket reader too; offload with asyncio.to_thread or move it off the hot path.",
+        "Reconnecting in a tight loop, or keeping the old book after a reconnect. Back off with jitter and rebuild state from the venue."
       ],
       "check": [
         {

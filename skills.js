@@ -1887,7 +1887,7 @@ window.SKILLS = {
       "tier": "A",
       "concentrations": [],
       "weeks": 10,
-      "concepts": 65,
+      "concepts": 66,
       "mcqs": 40,
       "widgets": 13,
       "prerequisites": [

@@ -3917,8 +3917,10 @@ def main() -> None:
     assert len(WEEKS) == 10 and [w["n"] for w in WEEKS] == list(range(1, 11)), "ten weeks, n = 1..10"
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import gen_finm_33500_w2w3                     # weeks 2-3: threads/processes, networking, protocols
+    import gen_finm_33500_w2w3                     # week 2: threads/processes; course-level terms
+    import gen_finm_33500_w3                       # week 3: networking and protocols; asyncio -> week 4
     gen_finm_33500_w2w3.apply(WEEKS, INTERVIEW, GLOSSARY)
+    gen_finm_33500_w3.apply(WEEKS)
     C = course()
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(

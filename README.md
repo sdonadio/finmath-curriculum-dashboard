@@ -187,7 +187,7 @@ weeks hold 13 widgets and around 180 controls between them.
 
 ## The widget menu
 
-All 16 are implemented once in `widgets.js` (the 13 of SCHEMA.md's menu, plus three added for FINM 33500 weeks 2–3) and driven entirely from
+All 18 are implemented once in `widgets.js` (the 13 of SCHEMA.md's menu, plus five added for FINM 33500 weeks 2–3) and driven entirely from
 `{type, title, params}`. They are SVG, seeded by an LCG (never `Math.random`),
 responsive, and they never throw: a bad type or a malformed parameter renders a
 readable note instead of breaking the page. KaTeX is used for `formula` strings
@@ -212,6 +212,8 @@ when it is absent — so the site works offline.
 | `concurrency-timeline` | Params `tasks, cpu_share, cores, mode, bursts, quantum, spawn, seed`. A mode switch (Threads + GIL / asyncio loop / Processes / Free-threaded) reschedules the same seeded CPU and I/O bursts; sliders for tasks, CPU share and cores, plus Reseed. Reads out finish time, the one-thread serial time, speed-up, average cores busy and the worst ready-wait. |
 | `packet-journey` | Params `scenarios:[{name, nodes[], steps:[{node, title, note, layers:[{osi, proto, fields, bytes}]}]}], view`. Scenario select, OSI 7 / TCP/IP 4 switch, hop slider and Prev / Next. Each hop's header stack is diffed against the previous hop: added, rewritten, removed; a byte bar shows the frame's composition. |
 | `transport-ladder` | Params `mode, rtt, msgs, gap, nagle, tls, loss, seed`. TCP / UDP / side-by-side sequence diagrams; sliders for RTT, message count and write gap; toggles for Nagle, TLS 1.3 and a dropped packet. Reads out set-up cost, last delivery, worst head-of-line wait and UDP gaps. |
+| `osi-stack` | Params `layers:[{n, name, job, pdu, examples, protocols, devices, note, header:{proto, short, fields:[{f,b}], trailer:[{f,b}]}}], message:{label, bytes}, select, step_ms`. The seven layers as 44 px HTML buttons with the TCP/IP four alongside; clicking one shows its job, PDU, header fields (sized by bytes), protocols and devices. "Send a message" animates encapsulation down a sender stack, the wire, and decapsulation up a receiver stack (◀ / ▶ step it, Reset); on a phone the frame scrolls to the active stack. |
+| `tcp-vs-udp` | Params `rtt, msgs, gap, loss, seed, tls`. The transport-ladder simulation pinned side by side with Nagle off: a packet-loss toggle, "lose a different packet", RTT and message sliders. Reads out handshake cost, TCP last delivery and worst head-of-line wait, UDP last delivery and the sequence gap. |
 
 ---
 
@@ -279,7 +281,11 @@ write. These are places where it was silent and the shell had to choose.
    `widget: {…} | null`. That is what a real course writes. The shell
    *additionally* accepts an array of widget specs, used only by
    `tools/demo_course.js`, which has to show all 13 types in five weeks.
-   `validate.py` counts a week as having a widget either way.
+   `validate.py` counts a week as having a widget either way. A widget spec may also carry `after: k`
+   (1-based concept number): `app.js` then draws it right after concept k
+   instead of after all the concepts, so a week can read concept, figure,
+   concept. A week may carry an optional `intro` (HTML, same allow-list as
+   `explain`), drawn above its topics.
 
 4. **`compute` as a "safe expression string".** `slider-formula` accepts a
    single expression or an ordered array of `{name, expr, label, fmt}`
