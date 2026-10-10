@@ -16,7 +16,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 "use strict";
 window.SKILLS = {
-  "generated": "2026-09-26",
+  "generated": "2026-10-09",
   "categories": [
     {
       "id": "math",
@@ -157,7 +157,8 @@ window.SKILLS = {
       "category": "data",
       "blurb": "Wire formats on the hot path: FIX tag=value, fixed-width binary feeds, framing, sequencing and gap fill, zero-copy field extraction",
       "built_in": [
-        "FINM 32700"
+        "FINM 32700",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -662,7 +663,8 @@ window.SKILLS = {
       "category": "programming",
       "blurb": "Shared memory, sockets and message buses between processes",
       "built_in": [
-        "FINM 32700"
+        "FINM 32700",
+        "FINM 33500"
       ],
       "assumed_in": []
     },
@@ -1017,6 +1019,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "networking-fundamentals",
+      "name": "Networking fundamentals",
+      "category": "programming",
+      "blurb": "How data crosses a network: the OSI and TCP/IP layers, encapsulation, DHCP, ARP and DNS, IP addressing, longest-prefix routing and NAT, TCP versus UDP, MTU and Nagle",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "neural-networks",
       "name": "Neural networks",
       "category": "stats-ml",
@@ -1215,6 +1227,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "python-concurrency",
+      "name": "Python concurrency",
+      "category": "programming",
+      "blurb": "Threads and processes in Python: the GIL and I/O- versus CPU-bound work, threading locks, queues and events, thread and process pools, start methods and pickling, and when to use each next to asyncio",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "python-pandas",
       "name": "Python pandas",
       "category": "programming",
@@ -1369,6 +1391,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "socket-programming",
+      "name": "Socket programming",
+      "category": "programming",
+      "blurb": "Sockets from code: TCP servers and clients, framing a byte stream with length prefixes, TCP_NODELAY, UDP datagrams and multicast groups, clean shutdown",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "spread-trades",
       "name": "Spread trades",
       "category": "trading",
@@ -1493,6 +1525,16 @@ window.SKILLS = {
       "assumed_in": []
     },
     {
+      "tag": "trading-protocols",
+      "name": "Trading protocols",
+      "category": "data",
+      "blurb": "The wire protocols of trading: FIX sessions (tag=value, sequence numbers, heartbeats, resend and gap fill), ITCH/OUCH and other binary feeds, SBE and FAST encodings, multicast with A/B arbitration",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
       "tag": "transaction-costs",
       "name": "Transaction costs",
       "category": "trading",
@@ -1563,6 +1605,16 @@ window.SKILLS = {
       "name": "Walk forward validation",
       "category": "stats-ml",
       "blurb": "Time-ordered model validation: expanding or rolling folds, embargoes against overlapping labels, leakage diagnosis and shuffled-label controls",
+      "built_in": [
+        "FINM 33500"
+      ],
+      "assumed_in": []
+    },
+    {
+      "tag": "websockets",
+      "name": "Websockets",
+      "category": "programming",
+      "blurb": "The WebSocket protocol in practice: the HTTP upgrade and accept key, text and control frames, ping/pong and close codes, client and server with the websockets library",
       "built_in": [
         "FINM 33500"
       ],
@@ -1835,9 +1887,9 @@ window.SKILLS = {
       "tier": "A",
       "concentrations": [],
       "weeks": 10,
-      "concepts": 50,
+      "concepts": 65,
       "mcqs": 40,
-      "widgets": 10,
+      "widgets": 13,
       "prerequisites": [
         "Comfortable, working Python: functions, classes, modules, pip, a debugger and git (the syllabus's stated requirement).",
         "Python 3.11 or newer on your own laptop. No paid data, no cloud account and no brokerage account are needed.",
@@ -1877,7 +1929,14 @@ window.SKILLS = {
         "algorithmic-complexity",
         "walk-forward-validation",
         "model-ops",
-        "pre-trade-risk-controls"
+        "pre-trade-risk-controls",
+        "python-concurrency",
+        "inter-process-communication",
+        "networking-fundamentals",
+        "socket-programming",
+        "websockets",
+        "trading-protocols",
+        "binary-protocol-parsing"
       ],
       "skills_assumed": [
         "numpy",

@@ -28,5 +28,30 @@
     "tag": "pre-trade-risk-controls",
     "category": "risk",
     "name": "Controls in front of every order: price collars, notional and position limits, message quotas, loss limits and a latched kill switch"
+  },
+  {
+    "tag": "python-concurrency",
+    "category": "programming",
+    "name": "Threads and processes in Python: the GIL and I/O- versus CPU-bound work, threading locks, queues and events, thread and process pools, start methods and pickling, and when to use each next to asyncio"
+  },
+  {
+    "tag": "networking-fundamentals",
+    "category": "programming",
+    "name": "How data crosses a network: the OSI and TCP/IP layers, encapsulation, DHCP, ARP and DNS, IP addressing, longest-prefix routing and NAT, TCP versus UDP, MTU and Nagle"
+  },
+  {
+    "tag": "socket-programming",
+    "category": "programming",
+    "name": "Sockets from code: TCP servers and clients, framing a byte stream with length prefixes, TCP_NODELAY, UDP datagrams and multicast groups, clean shutdown"
+  },
+  {
+    "tag": "websockets",
+    "category": "programming",
+    "name": "The WebSocket protocol in practice: the HTTP upgrade and accept key, text and control frames, ping/pong and close codes, client and server with the websockets library"
+  },
+  {
+    "tag": "trading-protocols",
+    "category": "data",
+    "name": "The wire protocols of trading: FIX sessions (tag=value, sequence numbers, heartbeats, resend and gap fill), ITCH/OUCH and other binary feeds, SBE and FAST encodings, multicast with A/B arbitration"
   }
 ]

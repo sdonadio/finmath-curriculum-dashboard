@@ -12,7 +12,7 @@
 
    ── public API (app.js depends on it, do not change the shape) ─────────
      window.WIDGETS.version            "1"
-     window.WIDGETS.types              array of the 13 type ids, SCHEMA order
+     window.WIDGETS.types              array of the 16 type ids, SCHEMA order first
      window.WIDGETS.has(type)          boolean
      window.WIDGETS.render(host, spec, opts)
                                        clears `host`, appends exactly one
@@ -61,7 +61,7 @@
    Every generated DOM id is prefixed "w<N>-" from a module counter, so a
    page with ten widgets never collides.
 
-   ── adding a 14th type ────────────────────────────────────────────────
+   ── adding a 17th type ────────────────────────────────────────────────
      1. write  function drawThing(c, p) { … }  using the shared helpers
         (c is the instance context: c.canvas/ c.controls/ c.stats/ c.legend/
         c.help/ c.id; p is the params object, already defaulted by you);
@@ -2882,6 +2882,582 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════
+     14. concurrency-timeline — the same jobs under four execution models
+     params: tasks (2–6), cpu_share (0–1), cores (1–8),
+             mode "threads" | "asyncio" | "processes" | "free-threaded",
+             bursts (1–5), quantum (GIL switch interval, ticks),
+             spawn (process start-up, ticks), seed
+     Every task alternates CPU bursts and I/O waits drawn from lcg(seed);
+     a tick-by-tick scheduler then runs the same jobs four ways:
+       threads        one GIL: one CPU burst at a time, the holder is
+                      preempted after `quantum` ticks if another is ready;
+                      I/O waits overlap freely
+       asyncio        one thread: a CPU burst runs to its next await, no
+                      preemption at all; I/O waits overlap
+       processes      up to `cores` CPU bursts at once, after `spawn` ticks
+                      of interpreter start-up per process
+       free-threaded  up to `cores` bursts at once, no GIL, no start-up
+     ═══════════════════════════════════════════════════════════════════ */
+  function drawConcurrency(c, p) {
+    var MODES = [{ v: "threads", label: "Threads + GIL" }, { v: "asyncio", label: "asyncio loop" },
+                 { v: "processes", label: "Processes" }, { v: "free-threaded", label: "Free-threaded" }];
+    var st = {
+      n: int(p.tasks, 4, 2, 6), share: num(p.cpu_share, 0.6, 0, 1), cores: int(p.cores, 4, 1, 8),
+      mode: str(p.mode, "threads"), bursts: int(p.bursts, 3, 1, 5), q: int(p.quantum, 5, 1, 50),
+      spawn: int(p.spawn, 10, 0, 80), seed: int(p.seed, 12345, 1, 2147483646)
+    };
+    var i, okMode = false;
+    for (i = 0; i < MODES.length; i++) { if (MODES[i].v === st.mode) { okMode = true; } }
+    if (!okMode) { st.mode = "threads"; }
+    var NAMES = arr(p.names);
+
+    var svg = c.canvas(300, "per-task timeline of running, waiting and I/O");
+    c.ctl(segmented(c, { label: "execution model", options: MODES, value: st.mode,
+                         onChange: function (v) { st.mode = v; redraw(); } }).node);
+    c.ctl(slider(c, { key: "tasks", label: "Tasks", min: 2, max: 6, step: 1, value: st.n,
+                      fmt: function (v) { return String(Math.round(v)); },
+                      onInput: function (v) { st.n = Math.round(v); redraw(); } }).node);
+    c.ctl(slider(c, { key: "share", label: "CPU share of the work", min: 0, max: 1, step: 0.05, value: st.share,
+                      fmt: function (v) { return Math.round(v * 100) + "%"; },
+                      onInput: function (v) { st.share = v; redraw(); } }).node);
+    c.ctl(slider(c, { key: "cores", label: "Cores", min: 1, max: 8, step: 1, value: st.cores,
+                      fmt: function (v) { return String(Math.round(v)); },
+                      onInput: function (v) { st.cores = Math.round(v); redraw(); } }).node);
+    c.ctl(button("Reseed", function () { st.seed = bumpSeed(st.seed); redraw(); }));
+
+    var S = c.stats([
+      { key: "mk", label: "Finished at" }, { key: "ser", label: "1 thread, blocking" },
+      { key: "sp", label: "Speed-up" }, { key: "busy", label: "Avg cores busy" },
+      { key: "ww", label: "Worst ready-wait", cls: "warn" }
+    ]);
+    c.legend([{ color: series(0), label: "running on a core (one colour per task)" },
+              { color: "#d4d4d4", label: "waiting on I/O (socket, disk, sleep)" },
+              { color: rgba(WARN_INK, 0.45), label: "ready, but waiting for the GIL / the loop / a core" },
+              { color: "#7a7a7a", label: "process start-up" }]);
+
+    function makeJobs() {
+      var rnd = lcg(st.seed), jobs = [], j, b, seq, cpu, io;
+      for (j = 0; j < st.n; j++) {
+        seq = [];
+        for (b = 0; b < st.bursts; b++) {
+          cpu = Math.max(1, Math.round(22 * st.share * (0.5 + rnd())));
+          io = Math.round(22 * (1 - st.share) * (0.5 + rnd()));
+          seq.push({ k: "cpu", d: cpu });
+          if (io > 0 && b < st.bursts - 1) { seq.push({ k: "io", d: io }); }
+        }
+        jobs.push(seq);
+      }
+      return jobs;
+    }
+
+    function simulate(jobs, mode) {
+      var n = jobs.length, T = [], lanes = [], run = [], j, k, t = 0, done = 0;
+      var holder = -1, used = 0, cpuTicks = 0, MAXT = 5000;
+      var parallel = (mode === "processes" || mode === "free-threaded");
+      for (j = 0; j < n; j++) {
+        T.push({ i: 0, rem: jobs[j][0].d, start: mode === "processes" ? st.spawn : 0,
+                 wait: 0, worst: 0, finish: -1 });
+        lanes.push([]);
+      }
+      while (done < n && t < MAXT) {
+        var ready = [], state = [], chosen = {};
+        for (j = 0; j < n; j++) {
+          var s = T[j];
+          if (s.finish >= 0) { state.push(" "); continue; }
+          if (t < s.start) { state.push("s"); continue; }
+          if (jobs[j][s.i].k === "io") { state.push("i"); continue; }
+          state.push("?");
+          ready.push(j);
+        }
+        if (ready.length) {
+          if (parallel) {
+            var order = ready.slice();
+            order.sort(function (a, b) { return (T[b].wait - T[a].wait) || (a - b); });
+            for (k = 0; k < order.length && k < st.cores; k++) { chosen[order[k]] = true; }
+          } else {
+            var holds = false;
+            for (k = 0; k < ready.length; k++) { if (ready[k] === holder) { holds = true; } }
+            var preempt = (mode === "threads" && holds && used >= st.q && ready.length > 1);
+            if (!holds || preempt) {
+              var nxt = -1;
+              for (k = 0; k < ready.length; k++) { if (ready[k] > holder) { nxt = ready[k]; break; } }
+              if (nxt < 0) { nxt = ready[0]; }
+              if (preempt && nxt === holder) { nxt = ready[(ready.indexOf(holder) + 1) % ready.length]; }
+              holder = nxt; used = 0;
+            }
+            chosen[holder] = true;
+            used++;
+          }
+        }
+        var nrun = 0;
+        for (j = 0; j < n; j++) {
+          var s2 = T[j];
+          if (state[j] === "?") {
+            if (chosen[j]) { state[j] = "r"; nrun++; s2.wait = 0; }
+            else { state[j] = "w"; s2.wait++; if (s2.wait > s2.worst) { s2.worst = s2.wait; } }
+          }
+          lanes[j].push(state[j]);
+          if (state[j] === "r" || state[j] === "i") {
+            s2.rem--;
+            if (s2.rem <= 0) {
+              s2.i++;
+              if (s2.i >= jobs[j].length) { s2.finish = t + 1; done++; }
+              else { s2.rem = jobs[j][s2.i].d; }
+            }
+          }
+        }
+        cpuTicks += nrun;
+        run.push(nrun);
+        t++;
+      }
+      var worst = 0;
+      for (j = 0; j < n; j++) { if (T[j].worst > worst) { worst = T[j].worst; } }
+      return { lanes: lanes, run: run, makespan: t, cpuTicks: cpuTicks, worst: worst };
+    }
+
+    function redraw() {
+      var jobs = makeJobs(), sim = simulate(jobs, st.mode), j, k, serial = 0;
+      for (j = 0; j < jobs.length; j++) { for (k = 0; k < jobs[j].length; k++) { serial += jobs[j][k].d; } }
+      var LH = 26, top = 26, labW = 74, rgt = 14, n = jobs.length;
+      var runTop = top + n * LH + 12, runH = 34, H = runTop + runH + 34;
+      var xmax = Math.max(serial, sim.makespan, 1);
+      var iw = W - labW - rgt;
+      function X(tk) { return labW + tk / xmax * iw; }
+      clearNode(svg);
+      c.resize(svg, W, H);
+      svg.appendChild(svgText(labW, 14, "time (ticks) →", 9, GRID_INK, "start"));
+      for (j = 0; j < n; j++) {
+        var y = top + j * LH, lane = sim.lanes[j], a = 0, ch;
+        var nm = NAMES.length > j ? str(NAMES[j], "") : ("task " + (j + 1));
+        svg.appendChild(svgText(labW - 8, y + LH / 2 + 3, nm.length > 11 ? nm.slice(0, 10) + "…" : nm, 9.5,
+                                BODY_INK, "end", "600"));
+        svg.appendChild(mk("line", { x1: labW, y1: r1(y + LH - 2), x2: W - rgt, y2: r1(y + LH - 2),
+                                     stroke: FAINT_INK, "stroke-width": 1 }));
+        while (a < lane.length) {
+          ch = lane[a];
+          var b = a;
+          while (b < lane.length && lane[b] === ch) { b++; }
+          if (ch !== " ") {
+            var fill = ch === "r" ? series(j) : (ch === "i" ? "#d4d4d4" : (ch === "w" ? rgba(WARN_INK, 0.45) : "#7a7a7a"));
+            var hh = ch === "r" ? LH - 8 : LH - 14;
+            svg.appendChild(mk("rect", { x: r1(X(a)), y: r1(y + (LH - 2 - hh) / 2), width: r1(Math.max(0.6, X(b) - X(a))),
+                                         height: hh, rx: 2, fill: fill }));
+          }
+          a = b;
+        }
+      }
+      /* the bottom lane: how many CPU bursts are actually executing */
+      var cap = (st.mode === "processes" || st.mode === "free-threaded") ? st.cores : 1;
+      var ymaxRun = Math.max(cap, 1);
+      svg.appendChild(svgText(labW - 8, runTop + runH / 2 + 3, "on a core", 9.5, BODY_INK, "end", "600"));
+      svg.appendChild(mk("rect", { x: labW, y: runTop, width: r1(iw), height: runH, fill: "#f6f6f6" }));
+      for (k = 0; k < sim.run.length; k++) {
+        if (!sim.run[k]) { continue; }
+        var hr = sim.run[k] / ymaxRun * runH;
+        svg.appendChild(mk("rect", { x: r1(X(k)), y: r1(runTop + runH - hr), width: r1(Math.max(0.6, X(k + 1) - X(k))),
+                                     height: r1(hr), fill: rgba(accent(), 0.55) }));
+      }
+      svg.appendChild(svgText(W - rgt, runTop - 3, "max " + cap + (cap === 1 ? " (one GIL / one loop)" : " (cores)"),
+                              8.5, GRID_INK, "end"));
+      /* axis, finish line and the serial reference */
+      var axY = runTop + runH + 4, ticks = niceTicks(0, xmax, 6);
+      svg.appendChild(mk("line", { x1: labW, y1: axY, x2: W - rgt, y2: axY, stroke: AXIS_INK, "stroke-width": 1 }));
+      for (k = 0; k < ticks.length; k++) {
+        if (ticks[k] < 0 || ticks[k] > xmax) { continue; }
+        svg.appendChild(svgText(X(ticks[k]), axY + 13, fmt(ticks[k], 0), 8.5, GRID_INK, "middle"));
+      }
+      var xm = X(sim.makespan), xs = X(serial);
+      svg.appendChild(mk("line", { x1: r1(xm), y1: top - 4, x2: r1(xm), y2: axY, stroke: accent(),
+                                   "stroke-width": 1.6 }));
+      svg.appendChild(svgText(xm - 3, top - 8, "done " + sim.makespan, 9, accent(), "end", "700"));
+      if (Math.abs(xs - xm) > 2) {
+        svg.appendChild(mk("line", { x1: r1(xs), y1: top - 4, x2: r1(xs), y2: axY, stroke: GRID_INK,
+                                     "stroke-width": 1, "stroke-dasharray": "4 3" }));
+        svg.appendChild(svgText(Math.min(xs + 3, W - rgt), axY + 26, "1 thread, blocking: " + serial, 8.5, GRID_INK,
+                                xs > W - 150 ? "end" : "start"));
+      }
+      S.set("mk", sim.makespan + " ticks");
+      S.set("ser", serial + " ticks");
+      S.set("sp", "×" + fmt(serial / Math.max(1, sim.makespan), 2), serial / sim.makespan > 1.05 ? "ok" : "warn");
+      S.set("busy", fmt(sim.cpuTicks / Math.max(1, sim.makespan), 2));
+      S.set("ww", sim.worst + " ticks", sim.worst > 2 * st.q ? "bad" : "warn");
+    }
+
+    c.help("Pick an execution model and the same seeded jobs are rescheduled: with the GIL only one CPU burst runs at a time (watch the bottom lane never exceed 1) while I/O waits overlap; asyncio is the same single thread without preemption, so one long burst makes every other task wait; processes and free-threading run up to Cores bursts in parallel, processes after a start-up cost. Slide the CPU share from I/O-bound (left) to CPU-bound (right) to see where threads stop helping.");
+    redraw();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     15. packet-journey — one message's headers, hop by hop
+     params: scenarios:[{name, nodes:[label…],
+                         steps:[{node, title, note,
+                                 layers:[{osi (1–7), proto, fields, bytes?}]}]}],
+             view "osi" | "tcpip"
+     The widget diffs each step's header stack against the previous one by
+     OSI layer: a layer that appears is ADDED (encapsulation), one that
+     disappears is REMOVED (decapsulation), one whose fields differ is
+     REWRITTEN (a router's TTL, a NAT's address and port, Wi-Fi → Ethernet).
+     ═══════════════════════════════════════════════════════════════════ */
+  function drawPacketJourney(c, p) {
+    var scIn = arr(p.scenarios), scs = [], i, j;
+    for (i = 0; i < scIn.length && scs.length < 8; i++) {
+      var g = scIn[i] || {}, nodes = arr(g.nodes), steps = [], sIn = arr(g.steps);
+      for (j = 0; j < sIn.length && steps.length < 40; j++) {
+        var s = sIn[j] || {}, lin = arr(s.layers), layers = [], k;
+        for (k = 0; k < lin.length; k++) {
+          var L = lin[k] || {};
+          layers.push({ osi: int(L.osi, 7, 1, 7), proto: str(L.proto, "?"), fields: str(L.fields, ""),
+                        bytes: has(L, "bytes") ? num(L.bytes, 0, 0, 1e6) : null });
+        }
+        layers.sort(function (a, b) { return b.osi - a.osi; });
+        steps.push({ node: int(s.node, 0, 0, Math.max(0, nodes.length - 1)), title: str(s.title, "step " + (j + 1)),
+                     note: str(s.note, ""), layers: layers });
+      }
+      if (nodes.length && steps.length) { scs.push({ name: str(g.name, "scenario " + (scs.length + 1)), nodes: nodes, steps: steps }); }
+    }
+    if (!scs.length) {
+      c.note("This packet journey has no usable scenario: each needs nodes[] and steps[] with layers[].");
+      c.help("Nothing to step through.");
+      return;
+    }
+    var st = { sc: 0, i: 0, view: str(p.view, "osi") === "tcpip" ? "tcpip" : "osi" };
+    var OSI = ["", "Physical", "Data link", "Network", "Transport", "Session", "Presentation", "Application"];
+    function tcpip(o) { return o >= 5 ? "Application" : (o === 4 ? "Transport" : (o === 3 ? "Internet" : "Link")); }
+
+    var svg = c.canvas(380, "network path and the header stack at each hop");
+    var opts = [];
+    for (i = 0; i < scs.length; i++) { opts.push({ v: String(i), label: scs[i].name }); }
+    if (scs.length > 1) {
+      c.ctl(selectCtl(c, { key: "sc", label: "Scenario", options: opts, value: "0",
+                           onChange: function (v) { st.sc = int(v, 0, 0, scs.length - 1); setStep(0); } }).node);
+    }
+    c.ctl(segmented(c, { label: "layer model", options: [{ v: "osi", label: "OSI 7" }, { v: "tcpip", label: "TCP/IP 4" }],
+                         value: st.view, onChange: function (v) { st.view = v; redraw(); } }).node);
+    var stepS = slider(c, { key: "step", label: "Hop", min: 1, max: scs[0].steps.length, step: 1, value: 1,
+                            fmt: function (v) { return Math.round(v) + " / " + scs[st.sc].steps.length; },
+                            onInput: function (v) { st.i = Math.round(v) - 1; redraw(); } });
+    c.ctl(stepS.node);
+    c.ctl(button("◀ Prev", function () { setStep(st.i - 1); }));
+    c.ctl(button("Next ▶", function () { setStep(st.i + 1); }));
+    function setStep(k) {
+      var n = scs[st.sc].steps.length;
+      st.i = Math.max(0, Math.min(n - 1, k));
+      stepS.input.max = String(n);
+      stepS.set(st.i + 1);
+      redraw();
+    }
+
+    var S = c.stats([
+      { key: "k", label: "Hop" }, { key: "at", label: "At" },
+      { key: "ch", label: "Changed here" }, { key: "note", label: "What happens", cls: "ok" }
+    ]);
+    c.legend([{ color: POS_INK, label: "added (encapsulated)" }, { color: WARN_INK, label: "rewritten" },
+              { color: NEG_INK, label: "removed (decapsulated)" }, { color: AXIS_INK, label: "unchanged" }]);
+
+    function redraw() {
+      var sc = scs[st.sc], cur = sc.steps[st.i], prev = st.i > 0 ? sc.steps[st.i - 1] : null, k, m;
+      var nN = sc.nodes.length, pathY = 44, left = 52, right = W - 52;
+      clearNode(svg);
+      /* the path */
+      function NX(q) { return nN === 1 ? W / 2 : left + q / (nN - 1) * (right - left); }
+      for (k = 0; k < nN - 1; k++) {
+        svg.appendChild(mk("line", { x1: r1(NX(k)), y1: pathY, x2: r1(NX(k + 1)), y2: pathY,
+                                     stroke: AXIS_INK, "stroke-width": 2 }));
+      }
+      var visited = {};
+      for (k = 0; k <= st.i; k++) { visited[sc.steps[k].node] = true; }
+      for (k = 0; k < nN; k++) {
+        var on = (k === cur.node), x = NX(k);
+        svg.appendChild(mk("circle", { cx: r1(x), cy: pathY, r: on ? 10 : 7,
+                                       fill: on ? accent() : (visited[k] ? rgba(accent(), 0.35) : "#ffffff"),
+                                       stroke: on ? accent() : GRID_INK, "stroke-width": 1.5 }));
+        var lab = str(sc.nodes[k], "");
+        var words = lab.split(" "), l1 = "", l2 = "";
+        for (m = 0; m < words.length; m++) {
+          if ((l1 + " " + words[m]).length <= 13 || !l1) { l1 = l1 ? l1 + " " + words[m] : words[m]; }
+          else { l2 = l2 ? l2 + " " + words[m] : words[m]; }
+        }
+        if (l2.length > 14) { l2 = l2.slice(0, 13) + "…"; }
+        svg.appendChild(svgText(x, pathY - (l2 ? 29 : 17), l1, 9, on ? accent() : BODY_INK, "middle", on ? "700" : "600"));
+        if (l2) { svg.appendChild(svgText(x, pathY - 17, l2, 9, on ? accent() : BODY_INK, "middle", on ? "700" : "600")); }
+      }
+      /* the header stack: union of this hop's and the previous hop's layers, by OSI number */
+      var byNow = {}, byPrev = {}, rows = [], seen = {};
+      for (k = 0; k < cur.layers.length; k++) { byNow[cur.layers[k].osi] = cur.layers[k]; }
+      if (prev) { for (k = 0; k < prev.layers.length; k++) { byPrev[prev.layers[k].osi] = prev.layers[k]; } }
+      for (k = 7; k >= 1; k--) {
+        if (byNow[k] || byPrev[k]) {
+          var stt = !byPrev[k] ? (prev ? "add" : "add") : (!byNow[k] ? "rem" :
+                    ((byNow[k].proto !== byPrev[k].proto || byNow[k].fields !== byPrev[k].fields) ? "chg" : "same"));
+          if (!prev) { stt = "add"; }
+          rows.push({ osi: k, L: byNow[k] || byPrev[k], st: stt });
+        }
+      }
+      var rowTop = 88, RH = 30, colL = 132, changed = [];
+      svg.appendChild(svgText(16, rowTop - 10, st.view === "osi" ? "OSI LAYER" : "TCP/IP LAYER", 8.5, GRID_INK, "start", "700"));
+      svg.appendChild(svgText(colL, rowTop - 10, "HEADER ON THE WIRE AT THIS HOP (outermost at the bottom)", 8.5, GRID_INK, "start", "700"));
+      var lastGroup = "";
+      for (k = 0; k < rows.length; k++) {
+        var R = rows[k], y = rowTop + k * RH;
+        var col = R.st === "add" ? POS_INK : (R.st === "chg" ? WARN_INK : (R.st === "rem" ? NEG_INK : AXIS_INK));
+        var grp = st.view === "osi" ? ("L" + R.osi + " " + OSI[R.osi]) : tcpip(R.osi);
+        if (st.view === "osi" || grp !== lastGroup) {
+          svg.appendChild(svgText(16, y + RH / 2 + 3, grp, 9.5, BODY_INK, "start", "600"));
+        }
+        if (st.view === "tcpip" && grp === lastGroup) {
+          svg.appendChild(mk("line", { x1: 18, y1: r1(y - 2), x2: 18, y2: r1(y + RH - 8), stroke: AXIS_INK, "stroke-width": 1 }));
+        }
+        lastGroup = grp;
+        svg.appendChild(mk("rect", { x: colL, y: r1(y), width: r1(W - colL - 16), height: RH - 6, rx: 5,
+                                     fill: R.st === "same" ? "#f4f4f4" : rgba(col, 0.13),
+                                     stroke: col, "stroke-width": R.st === "same" ? 0.8 : 1.4,
+                                     "stroke-dasharray": R.st === "rem" ? "4 3" : null }));
+        var tag = R.st === "add" ? "+" : (R.st === "chg" ? "~" : (R.st === "rem" ? "−" : " "));
+        svg.appendChild(svgText(colL + 9, y + RH / 2 + 1, tag, 12, col, "start", "700"));
+        svg.appendChild(svgText(colL + 24, y + RH / 2 + 1, R.L.proto, 10, R.st === "rem" ? NEG_INK : BODY_INK, "start", "700"));
+        var f = R.L.fields + (R.L.bytes !== null ? "  [" + fmt(R.L.bytes, 0) + " B]" : "");
+        if (f.length > 66) { f = f.slice(0, 65) + "…"; }
+        svg.appendChild(svgText(colL + 108, y + RH / 2 + 1, R.st === "rem" ? "removed here" : f, 9.5,
+                                R.st === "rem" ? NEG_INK : GRID_INK, "start"));
+        if (R.st !== "same" && prev) { changed.push(tag + R.L.proto); }
+      }
+      /* byte bar: what fraction of the frame is header */
+      var tot = 0, parts = [];
+      for (k = cur.layers.length - 1; k >= 0; k--) {
+        if (cur.layers[k].bytes) { tot += cur.layers[k].bytes; parts.push(cur.layers[k]); }
+      }
+      var barY = rowTop + rows.length * RH + 8;
+      if (tot > 0) {
+        var bx = colL, bw = W - colL - 16;
+        svg.appendChild(svgText(16, barY + 11, "bytes", 9.5, BODY_INK, "start", "600"));
+        for (k = 0; k < parts.length; k++) {
+          var w2 = parts[k].bytes / tot * bw;
+          svg.appendChild(mk("rect", { x: r1(bx), y: barY, width: r1(Math.max(1, w2 - 1)), height: 16,
+                                       fill: series(7 - parts[k].osi), opacity: 0.8 }));
+          if (w2 > 34) { svg.appendChild(svgText(bx + w2 / 2, barY + 11.5, parts[k].proto, 8.5, "#ffffff", "middle", "700")); }
+          bx += w2;
+        }
+        svg.appendChild(svgText(W - 16, barY + 30, fmt(tot, 0) + " B on the wire", 8.5, GRID_INK, "end"));
+        barY += 34;
+      }
+      c.resize(svg, W, Math.max(160, barY + 6));
+      S.set("k", (st.i + 1) + " / " + sc.steps.length + " · " + cur.title);
+      S.set("at", str(sc.nodes[cur.node], ""));
+      S.set("ch", prev ? (changed.length ? changed.join(", ") : "nothing") : "built from the top down");
+      S.set("note", cur.note || "—", "ok");
+    }
+
+    c.help("Step through the hops with Prev / Next or the slider: the dot shows where the message is, and the stack below shows its headers there, coloured by what this hop added (+), rewrote (~) or stripped (−) compared with the previous hop. Switch OSI 7 / TCP/IP 4 to see the same headers grouped both ways.");
+    redraw();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     16. transport-ladder — TCP and UDP drawn as a sequence (ladder) chart
+     params: mode "tcp" | "udp" | "both", rtt (ms), msgs (1–8), gap (ms
+             between application writes), nagle, tls, loss, seed
+     TCP: three-way handshake (plus one TLS 1.3 round trip if tls), then
+     each write becomes a segment — or, with Nagle on, waits while earlier
+     data is unacknowledged and leaves coalesced with later writes. A lost
+     segment is retransmitted after an RTO of 2 × RTT (no fast retransmit
+     modelled); the receiver delivers in order, so later segments wait:
+     head-of-line blocking. UDP: no handshake, each write is a datagram, a
+     lost one is simply gone and the next sequence number reveals the gap.
+     ═══════════════════════════════════════════════════════════════════ */
+  function drawTransportLadder(c, p) {
+    var st = { mode: str(p.mode, "both"), rtt: num(p.rtt, 20, 2, 200), n: int(p.msgs, 4, 1, 8),
+               gap: num(p.gap, 4, 0, 100), nagle: bool(p.nagle, true), tls: bool(p.tls, false),
+               loss: bool(p.loss, true), seed: int(p.seed, 12345, 1, 2147483646) };
+    if (st.mode !== "tcp" && st.mode !== "udp") { st.mode = "both"; }
+
+    var svg = c.canvas(420, "client and server timelines with packets between them");
+    c.ctl(segmented(c, { label: "transport", options: [{ v: "tcp", label: "TCP" }, { v: "udp", label: "UDP" },
+                                                        { v: "both", label: "Side by side" }],
+                         value: st.mode, onChange: function (v) { st.mode = v; redraw(); } }).node);
+    c.ctl(slider(c, { key: "rtt", label: "Round-trip time", min: 2, max: 100, step: 1, value: st.rtt,
+                      fmt: function (v) { return Math.round(v) + " ms"; },
+                      onInput: function (v) { st.rtt = v; redraw(); } }).node);
+    c.ctl(slider(c, { key: "n", label: "Messages", min: 1, max: 8, step: 1, value: st.n,
+                      fmt: function (v) { return String(Math.round(v)); },
+                      onInput: function (v) { st.n = Math.round(v); redraw(); } }).node);
+    c.ctl(slider(c, { key: "gap", label: "Gap between writes", min: 0, max: 40, step: 1, value: st.gap,
+                      fmt: function (v) { return Math.round(v) + " ms"; },
+                      onInput: function (v) { st.gap = v; redraw(); } }).node);
+    c.ctl(toggleBtn("Nagle (TCP_NODELAY off)", st.nagle, function (v) { st.nagle = v; redraw(); }));
+    c.ctl(toggleBtn("TLS 1.3", st.tls, function (v) { st.tls = v; redraw(); }));
+    c.ctl(toggleBtn("Drop one packet", st.loss, function (v) { st.loss = v; redraw(); }));
+    c.ctl(button("Reseed (which packet)", function () { st.seed = bumpSeed(st.seed); redraw(); }));
+
+    var S = c.stats([
+      { key: "hs", label: "TCP set-up" }, { key: "tcp", label: "TCP: last delivered" },
+      { key: "hol", label: "TCP: worst HOL wait", cls: "warn" }, { key: "udp", label: "UDP: last delivered" },
+      { key: "ud", label: "UDP: delivered" }
+    ]);
+    c.legend([{ color: accent(), label: "data" }, { color: GRID_INK, label: "handshake / ACK" },
+              { color: NEG_INK, label: "lost" }, { color: POS_INK, label: "delivered to the application" }]);
+
+    function lossIndex(count) {
+      if (!st.loss || count < 1) { return -1; }
+      var r = lcg(st.seed)();
+      return Math.min(count - 1, Math.floor(r * count));
+    }
+
+    function simTCP() {
+      var h = st.rtt / 2, rto = 2 * st.rtt, A = [], D = [], ready = st.rtt, i;
+      A.push({ dir: 1, ts: 0, ta: h, label: "SYN", kind: "ctl" });
+      A.push({ dir: -1, ts: h, ta: st.rtt, label: "SYN-ACK", kind: "ctl" });
+      A.push({ dir: 1, ts: st.rtt, ta: st.rtt + h, label: st.tls ? "ACK + ClientHello" : "ACK", kind: "ctl" });
+      if (st.tls) {
+        A.push({ dir: -1, ts: st.rtt + h, ta: 2 * st.rtt, label: "ServerHello … Finished", kind: "ctl" });
+        ready = 2 * st.rtt;
+      }
+      var lk = lossIndex(st.n);          /* the index of the data SEGMENT that is lost (first send) */
+      var ev = [], segs = [], buffer = [], inflight = 0, firstSends = 0, delivered = 0, nextSeg = 0;
+      var recv = {}, deliver = [], ownArr = [], k, guard = 0;
+      for (i = 0; i < st.n; i++) { ev.push({ t: ready + i * st.gap, type: "write", m: i }); }
+      function send(msgs, t, seg) {
+        var s = seg;
+        if (!s) { s = { id: segs.length, msgs: msgs, first: firstSends === lk }; segs.push(s); firstSends++; inflight++; }
+        var lost = s.first && !s.retx;
+        A.push({ dir: 1, ts: t, ta: t + h, label: (seg ? "retx " : "") + "m" + s.msgs.map(function (x) { return x + 1; }).join("+m"),
+                 kind: lost ? "lost" : "data" });
+        if (lost) { s.retx = true; ev.push({ t: t + rto, type: "rto", seg: s }); }
+        else { ev.push({ t: t + h, type: "arrive", seg: s }); }
+      }
+      while (ev.length && guard++ < 400) {
+        var bi = 0;
+        for (k = 1; k < ev.length; k++) { if (ev[k].t < ev[bi].t - 1e-9) { bi = k; } }
+        var e = ev.splice(bi, 1)[0];
+        if (e.type === "write") {
+          if (!st.nagle || inflight === 0) { send([e.m], e.t, null); }
+          else { buffer.push(e.m); }
+        } else if (e.type === "rto") {
+          send(null, e.t, e.seg);
+        } else if (e.type === "arrive") {
+          var sg = e.seg;
+          if (!recv[sg.id]) {
+            recv[sg.id] = e.t;
+            for (k = 0; k < sg.msgs.length; k++) { ownArr[sg.msgs[k]] = e.t; }
+          }
+          while (recv[nextSeg] !== undefined) {
+            var s3 = segs[nextSeg];
+            for (k = 0; k < s3.msgs.length; k++) { deliver[s3.msgs[k]] = e.t; delivered++; }
+            nextSeg++;
+          }
+          A.push({ dir: -1, ts: e.t, ta: e.t + h, label: "ACK", kind: "ack" });
+          ev.push({ t: e.t + h, type: "ack", upto: nextSeg });
+        } else if (e.type === "ack") {
+          inflight = segs.length - e.upto;
+          if (st.nagle && inflight === 0 && buffer.length) { send(buffer.slice(), e.t, null); buffer = []; }
+        }
+      }
+      var last = 0, hol = 0;
+      for (i = 0; i < st.n; i++) {
+        if (deliver[i] !== undefined) {
+          if (deliver[i] > last) { last = deliver[i]; }
+          if (deliver[i] - ownArr[i] > hol) { hol = deliver[i] - ownArr[i]; }
+          D.push({ t: deliver[i], label: "m" + (i + 1), hol: deliver[i] - ownArr[i] });
+        }
+      }
+      return { arrows: A, deliv: D, ready: ready, last: last, hol: hol, delivered: delivered };
+    }
+
+    function simUDP() {
+      var h = st.rtt / 2, A = [], D = [], lk = lossIndex(st.n), i, last = 0, got = 0;
+      for (i = 0; i < st.n; i++) {
+        var ts = i * st.gap, lost = (i === lk);
+        A.push({ dir: 1, ts: ts, ta: ts + h, label: "seq " + (i + 1), kind: lost ? "lost" : "data" });
+        if (!lost) { D.push({ t: ts + h, label: "m" + (i + 1), hol: 0 }); got++; if (ts + h > last) { last = ts + h; } }
+      }
+      return { arrows: A, deliv: D, ready: 0, last: last, hol: 0, delivered: got, lost: lk };
+    }
+
+    function ladder(x0, x1, sim, title, tmax, top, bottom) {
+      var xc = x0 + 34, xs = x1 - (st.mode === "both" ? 104 : 140), k;
+      function Y(t) { return top + t / tmax * (bottom - top); }
+      svg.appendChild(svgText((xc + xs) / 2, 14, title, 10.5, accent(), "middle", "700"));
+      svg.appendChild(svgText(xc, top - 8, "client", 9, BODY_INK, "middle", "700"));
+      svg.appendChild(svgText(xs, top - 8, "server", 9, BODY_INK, "middle", "700"));
+      svg.appendChild(mk("line", { x1: xc, y1: top, x2: xc, y2: bottom, stroke: GRID_INK, "stroke-width": 1.4 }));
+      svg.appendChild(mk("line", { x1: xs, y1: top, x2: xs, y2: bottom, stroke: GRID_INK, "stroke-width": 1.4 }));
+      var ticks = niceTicks(0, tmax, 6);
+      for (k = 0; k < ticks.length; k++) {
+        if (ticks[k] < 0 || ticks[k] > tmax) { continue; }
+        svg.appendChild(svgText(xc - 6, Y(ticks[k]) + 3, fmt(ticks[k], 0), 8, GRID_INK, "end"));
+        svg.appendChild(mk("line", { x1: xc, y1: r1(Y(ticks[k])), x2: xs, y2: r1(Y(ticks[k])), stroke: FAINT_INK, "stroke-width": 0.8 }));
+      }
+      for (k = 0; k < sim.arrows.length; k++) {
+        var a = sim.arrows[k];
+        var xa = a.dir > 0 ? xc : xs, xb = a.dir > 0 ? xs : xc;
+        var ya = Y(a.ts), yb = Y(a.ta);
+        var col = a.kind === "data" ? accent() : (a.kind === "lost" ? NEG_INK : GRID_INK);
+        if (a.kind === "lost") {
+          var xm = (xa + xb) / 2, ym = (ya + yb) / 2;
+          svg.appendChild(mk("line", { x1: r1(xa), y1: r1(ya), x2: r1(xm), y2: r1(ym), stroke: col, "stroke-width": 1.6 }));
+          svg.appendChild(svgText(xm, ym + 4, "✕", 12, col, "middle", "700"));
+        } else {
+          svg.appendChild(mk("line", { x1: r1(xa), y1: r1(ya), x2: r1(xb), y2: r1(yb), stroke: col,
+                                       "stroke-width": a.kind === "data" ? 1.7 : 1, "stroke-dasharray": a.kind === "ack" ? "3 3" : null }));
+          var dx = a.dir > 0 ? -6 : 6;
+          svg.appendChild(mk("path", { d: "M" + r1(xb) + " " + r1(yb) + " l" + dx + " -3 l0 6 z", fill: col }));
+        }
+        if (a.kind !== "ack") {
+          var fr = a.kind === "ctl" ? 0.68 : 0.3;
+          var lx = xa + (xb - xa) * fr, ly = ya + (yb - ya) * fr - 3;
+          svg.appendChild(svgText(lx, ly, a.label.length > 22 ? a.label.slice(0, 21) + "…" : a.label, 8.5, col,
+                                  "middle", a.kind === "data" ? "700" : null));
+        }
+      }
+      /* deliveries at the same instant share one label (a retransmission releases a whole run) */
+      var groups = [], gq;
+      for (k = 0; k < sim.deliv.length; k++) {
+        var d = sim.deliv[k];
+        gq = groups.length ? groups[groups.length - 1] : null;
+        if (gq && Math.abs(gq.t - d.t) < 1e-6) { gq.labels.push(d.label); if (d.hol > gq.hol) { gq.hol = d.hol; } }
+        else { groups.push({ t: d.t, labels: [d.label], hol: d.hol }); }
+      }
+      var lastY = -1e9;
+      for (k = 0; k < groups.length; k++) {
+        var gd = groups[k], yd = Y(gd.t), ty = Math.max(yd + 3, lastY + 10);
+        lastY = ty;
+        svg.appendChild(mk("circle", { cx: xs, cy: r1(yd), r: 3.4, fill: POS_INK }));
+        var txt = (gd.labels.length > 2 ? gd.labels[0] + "–" + gd.labels[gd.labels.length - 1] : gd.labels.join("+"))
+                  + (gd.hol > 0.01 ? " · HOL " + fmt(gd.hol, 0) + " ms" : "");
+        svg.appendChild(svgText(xs + 7, ty, txt, 8.5, gd.hol > 0.01 ? WARN_INK : POS_INK, "start", "700"));
+      }
+      if (sim.ready > 0) {
+        svg.appendChild(mk("line", { x1: xc - 4, y1: r1(Y(sim.ready)), x2: xc + 4, y2: r1(Y(sim.ready)), stroke: accent(), "stroke-width": 2 }));
+      }
+    }
+
+    function redraw() {
+      var T = simTCP(), U = simUDP(), H = 420, top = 40, bottom = H - 16;
+      var tmax = st.rtt, k2;
+      if (st.mode !== "udp") { for (k2 = 0; k2 < T.arrows.length; k2++) { tmax = Math.max(tmax, T.arrows[k2].ta); } }
+      if (st.mode !== "tcp") { for (k2 = 0; k2 < U.arrows.length; k2++) { tmax = Math.max(tmax, U.arrows[k2].ta); } }
+      tmax = tmax * 1.03 + 1;
+      clearNode(svg);
+      if (st.mode === "both") {
+        ladder(0, W / 2 - 6, T, "TCP" + (st.tls ? " + TLS 1.3" : "") + (st.nagle ? ", Nagle on" : ", TCP_NODELAY"), tmax, top, bottom);
+        svg.appendChild(mk("line", { x1: W / 2, y1: 8, x2: W / 2, y2: bottom, stroke: FAINT_INK, "stroke-width": 1 }));
+        ladder(W / 2 + 6, W, U, "UDP datagrams", tmax, top, bottom);
+      } else if (st.mode === "tcp") {
+        ladder(60, W - 60, T, "TCP" + (st.tls ? " + TLS 1.3" : "") + (st.nagle ? ", Nagle on" : ", TCP_NODELAY"), tmax, top, bottom);
+      } else {
+        ladder(60, W - 60, U, "UDP datagrams", tmax, top, bottom);
+      }
+      S.set("hs", fmt(T.ready, 0) + " ms (" + (st.tls ? "2" : "1") + " RTT)");
+      S.set("tcp", fmt(T.last, 0) + " ms");
+      S.set("hol", fmt(T.hol, 0) + " ms", T.hol > 0.01 ? "bad" : "ok");
+      S.set("udp", fmt(U.last, 0) + " ms");
+      S.set("ud", U.delivered + " / " + st.n + (U.delivered < st.n ? " (gap at seq " + (U.lost + 1) + ")" : ""),
+            U.delivered < st.n ? "warn" : "ok");
+    }
+
+    c.help("Time runs down the page; each slanted arrow is a packet crossing the network in half a round trip. TCP pays a handshake before any data (two round trips with TLS) and delivers every message in order, so one lost segment holds back the ones behind it until the retransmission lands (HOL); with Nagle on, small writes wait for the previous ACK and leave coalesced. UDP sends at once, keeps message boundaries and never waits, but a lost datagram is gone and only the next sequence number reveals the gap.");
+    redraw();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
      THE REGISTRY — one entry per type. Adding a type is one line here
      plus one id in TYPE_ORDER.
      ═══════════════════════════════════════════════════════════════════ */
@@ -2889,7 +3465,8 @@
   var TYPE_ORDER = [
     "payoff", "binomial-tree", "curve", "simulate-paths", "histogram",
     "slider-formula", "orderbook", "heatmap", "regression",
-    "efficient-frontier", "tree-diagram", "timeline", "code-trace"
+    "efficient-frontier", "tree-diagram", "timeline", "code-trace",
+    "concurrency-timeline", "packet-journey", "transport-ladder"
   ];
   var TYPES = {
     "payoff":             drawPayoff,
@@ -2904,7 +3481,10 @@
     "efficient-frontier": drawFrontier,
     "tree-diagram":       drawTree,
     "timeline":           drawTimeline,
-    "code-trace":         drawCodeTrace
+    "code-trace":         drawCodeTrace,
+    "concurrency-timeline": drawConcurrency,
+    "packet-journey":     drawPacketJourney,
+    "transport-ladder":   drawTransportLadder
   };
 
   /* ───────────────────────────── render ─────────────────────────────── */

@@ -3743,7 +3743,10 @@ SKILLS_BUILT = [
 # Proposed in data/new_tags/finm-33500.json; each joins skills_built only once it resolves
 # (it appears in data/skills_seed.js, in skills.js, or in another course's tags).
 EXTRA_TAGS = ["asyncio-concurrency", "object-oriented-design", "algorithmic-complexity",
-              "walk-forward-validation", "model-ops", "pre-trade-risk-controls"]
+              "walk-forward-validation", "model-ops", "pre-trade-risk-controls",
+              # 2026-10-09, weeks 2-3 extension (tools/gen_finm_33500_w2w3.py)
+              "python-concurrency", "inter-process-communication", "networking-fundamentals",
+              "socket-programming", "websockets", "trading-protocols", "binary-protocol-parsing"]
 SKILLS_ASSUMED = ["numpy", "git-version-control", "shell-and-filesystem", "linear-regression", "random-walk"]
 
 
@@ -3912,6 +3915,10 @@ def course():
 
 def main() -> None:
     assert len(WEEKS) == 10 and [w["n"] for w in WEEKS] == list(range(1, 11)), "ten weeks, n = 1..10"
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import gen_finm_33500_w2w3                     # weeks 2-3: threads/processes, networking, protocols
+    gen_finm_33500_w2w3.apply(WEEKS, INTERVIEW, GLOSSARY)
     C = course()
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(
@@ -3927,7 +3934,7 @@ def main() -> None:
         f.write(';\n')
     n_c = sum(len(w["concepts"]) for w in WEEKS)
     print(f"wrote {OUT}: {len(WEEKS)} weeks, {n_c} concepts, "
-          f"{sum(1 for w in WEEKS if w.get('widget'))} widgets, {sum(len(w['check']) for w in WEEKS)} MCQs, "
+          f"{sum(len(w['widget']) if isinstance(w.get('widget'), list) else int(bool(w.get('widget'))) for w in WEEKS)} widgets, {sum(len(w['check']) for w in WEEKS)} MCQs, "
           f"{len(INTERVIEW)} interview, {len(GLOSSARY)} glossary, skills_built {len(C['skills_built'])}")
 
 

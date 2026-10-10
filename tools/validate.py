@@ -148,7 +148,8 @@ def load_reference():
     if os.path.exists(wpath):
         with open(wpath, "r", encoding="utf-8") as fh:
             src = fh.read()
-        m = re.search(r"types\s*:\s*\[(.*?)\]", src, re.S)
+        m = (re.search(r"TYPE_ORDER\s*=\s*\[(.*?)\]", src, re.S)
+             or re.search(r"types\s*:\s*\[(.*?)\]", src, re.S))
         if m:
             ids = re.findall(r"""["']([a-z][a-z0-9-]*)["']""", m.group(1))
             if ids:
